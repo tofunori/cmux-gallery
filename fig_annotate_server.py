@@ -163,7 +163,7 @@ class Handler(SimpleHTTPRequestHandler):
                 q = parse_qs(urlparse(self.path).query)
                 p = self._safe_path(q["path"][0])
                 if not p:
-                    return self._respond(403, {"error": "hors ~/Documents"})
+                    return self._respond(403, {"error": "outside the project"})
                 root = find_tex_root(p)
                 return self._respond(200, {"root": root, "pdf": root.rsplit(".", 1)[0] + ".pdf"})
             except Exception as e:
@@ -194,7 +194,7 @@ class Handler(SimpleHTTPRequestHandler):
                 q = parse_qs(urlparse(self.path).query)
                 p = self._safe_path(q["path"][0])
                 if not p or not os.path.isfile(p):
-                    return self._respond(404, {"error": "fichier introuvable ou hors ~/Documents"})
+                    return self._respond(404, {"error": "file not found or outside the project"})
                 with open(p, encoding="utf-8", errors="replace") as f:
                     text = f.read()
                 return self._respond(200, {"text": text, "mtime": os.path.getmtime(p), "path": p})
@@ -284,7 +284,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if p.startswith(PROJECT + os.sep) and os.path.exists(p):
                     subprocess.run(["open", p], timeout=10)
                     return self._respond(200, {"ok": True})
-                return self._respond(404, {"error": "introuvable"})
+                return self._respond(404, {"error": "not found"})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path == "/compile":
@@ -293,7 +293,7 @@ class Handler(SimpleHTTPRequestHandler):
                 req = json.loads(self.rfile.read(length))
                 p = self._safe_path(req["path"])
                 if not p:
-                    return self._respond(403, {"error": "hors ~/Documents"})
+                    return self._respond(403, {"error": "outside the project"})
                 root = find_tex_root(p)
                 r = subprocess.run(
                     ["/Library/TeX/texbin/latexmk", "-pdf", "-synctex=1",
@@ -320,7 +320,7 @@ class Handler(SimpleHTTPRequestHandler):
                 tex = self._safe_path(req["tex"])
                 pdf = self._safe_path(req["pdf"])
                 if not tex or not pdf:
-                    return self._respond(403, {"error": "hors ~/Documents"})
+                    return self._respond(403, {"error": "outside the project"})
                 if req["dir"] == "view":  # source -> PDF
                     r = subprocess.run(
                         ["/Library/TeX/texbin/synctex", "view",
@@ -352,7 +352,7 @@ class Handler(SimpleHTTPRequestHandler):
                 req = json.loads(self.rfile.read(length))
                 p = self._safe_path(req["path"])
                 if not p:
-                    return self._respond(403, {"error": "hors ~/Documents"})
+                    return self._respond(403, {"error": "outside the project"})
                 disk_mtime = os.path.getmtime(p) if os.path.exists(p) else 0
                 if req.get("mtime") and abs(disk_mtime - req["mtime"]) > 0.001:
                     return self._respond(409, {"error": "conflit", "mtime": disk_mtime})
