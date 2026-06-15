@@ -225,7 +225,9 @@ HTML = """<!DOCTYPE html>
   .acts .ico.on{color:#ffce3a;border-color:#ffce3a}
   .acts .del:hover{color:#ff9a9a;border-color:#7a2a2a;background:rgba(255,80,80,.08)}
   .selbox{position:absolute;top:6px;left:6px;font-size:15px;cursor:pointer;line-height:1;
-        background:rgba(15,17,21,.85);border:1px solid #3a3f4a;border-radius:6px;padding:4px 7px;user-select:none;color:#e6e8ec}
+        background:rgba(15,17,21,.85);border:1px solid #3a3f4a;border-radius:6px;padding:4px 7px;user-select:none;color:#e6e8ec;
+        opacity:0;transition:opacity .12s}
+  .card:hover .selbox,.selbox.on{opacity:1}
   .selbox.on{color:#ff6b6b;border-color:#ff6b6b}
   .star{position:absolute;top:6px;right:6px;font-size:18px;cursor:pointer;line-height:1;
         background:rgba(15,17,21,.85);border:1px solid #3a3f4a;border-radius:50%;padding:5px 6px;user-select:none;color:#e6e8ec}
@@ -539,8 +541,7 @@ function render(){
     const arch = f.archive?`<span class="tag archive">archive</span>`:'';
     const isFav = favs.has(f.rel);
     return `<div class="card ${f.archive?'arch':''}">
-      <span class="star ${isFav?'on':''}" data-act="fav" data-rel="${escA(f.rel)}">${isFav?'\u2605':'\u2606'}</span>
-      <span class="selbox ${selSet.has(f.rel)?'on':''}" data-act="sel" data-rel="${escA(f.rel)}">${selSet.has(f.rel)?'\u25A0':'\u25A2'}</span>
+      <span class="selbox ${selSet.has(f.rel)?'on':''}" data-act="sel" data-rel="${escA(f.rel)}" title="Select for bulk delete">${selSet.has(f.rel)?'■':'▢'}</span>
       ${(imgExt(f.ext)||f.ext==='pdf'||f.ext==='md'||codeExt(f.ext))?`<div data-act="lb" data-rel="${escA(f.rel)}" style="cursor:zoom-in">${thumb}</div>`:appExt(f.ext)?`<div data-act="open" data-rel="${escA(f.rel)}" style="cursor:pointer" title="Open with default app">${thumb}</div>`:`<a href="${escA(f.rel)}" target="_blank" style="text-decoration:none">${thumb}</a>`}
       <div class="meta">
         <div class="nm">${esc(f.name)}</div>
