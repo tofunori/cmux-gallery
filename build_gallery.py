@@ -545,7 +545,7 @@ function render(){
       ${(imgExt(f.ext)||f.ext==='pdf'||f.ext==='md'||codeExt(f.ext))?`<div data-act="lb" data-rel="${escA(f.rel)}" style="cursor:zoom-in">${thumb}</div>`:appExt(f.ext)?`<div data-act="open" data-rel="${escA(f.rel)}" style="cursor:pointer" title="Open with default app">${thumb}</div>`:`<a href="${escA(f.rel)}" target="_blank" style="text-decoration:none">${thumb}</a>`}
       <div class="meta">
         <div class="nm">${esc(f.name)}</div>
-        ${isFav?rateRow(f.rel):''}
+        ${rateRow(f.rel)}
         <div class="fld">${esc(f.folder)}</div>
         <div class="row"><span class="tag">${esc(f.ext)}</span>${arch}<span title="created ${escA(f.bdate)} \u00b7 modified ${escA(f.mdate)}">${sort.startsWith('btime')?esc(f.bdate):esc(f.mdate)}</span><span>${fmtSize(f.size)}</span></div>
       </div>
