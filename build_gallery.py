@@ -314,9 +314,8 @@ HTML = """<!DOCTYPE html>
   <span class="lbBtn" id="lbPrev">&#8249;</span>
   <span class="lbBtn" id="lbNext">&#8250;</span>
   <div id="annotBar">
-    <button data-tool="pen" class="sel" title="Pen (1)">&#9998;</button>
-    <button data-tool="arrow" title="Arrow (2)">&#8594;</button>
-    <button data-tool="rect" title="Rectangle (3)">&#9645;</button>
+    <button data-tool="arrow" title="Arrow (1)">&#8594;</button>
+    <button data-tool="rect" class="sel" title="Rectangle (2)">&#9645;</button>
     <input type="color" id="annotColor" value="#ff2d2d" title="Color">
     <button id="annotUndo" title="Undo">&#8630;</button>
     <button id="annotClear" title="Clear all">&#10006;</button>
@@ -428,7 +427,7 @@ document.addEventListener('keydown',e=>{
   if(!lb().classList.contains('show'))return;
   if(lb().classList.contains('annot')){
     if((e.metaKey||e.ctrlKey)&&e.key==='z'){e.preventDefault();document.getElementById('annotUndo').onclick();return;}
-    if(e.key>='1'&&e.key<='3'){
+    if(e.key>='1'&&e.key<='2'){
       const b=document.querySelectorAll('#annotBar button[data-tool]')[+e.key-1];
       if(b)b.onclick(); return;
     }
@@ -599,7 +598,7 @@ document.getElementById('q').oninput=render;
 document.getElementById('sort').onchange=render;
 fsel.onchange=render;
 // ---- Annotation ----
-let annotTool='pen', annotStrokes=[], annotCur=null, annotSent=true;
+let annotTool='rect', annotStrokes=[], annotCur=null, annotSent=true;
 function annotGuard(){
   if(lb().classList.contains('annot') && annotStrokes.length && !annotSent)
     return confirm('Unsaved annotations \u2014 discard them?');
