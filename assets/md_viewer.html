@@ -90,6 +90,7 @@ if(file){
 
 let cm = null, diskMtime = 0, dirty = false, loaded = false, srcText = "";
 function setState(cls, txt){ stateEl.className = cls; stateEl.textContent = txt; }
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 function renderPreview(text){ srcText = text || ""; wrap.innerHTML = DOMPurify.sanitize(marked.parse(srcText)); }
 
 // --- chargement via /code (text + mtime) ; repli lecture seule via fetch brut ---
@@ -99,18 +100,18 @@ async function load(){
       const r = await fetch("/" + file.split("/").map(encodeURIComponent).join("/"));
       if(!r.ok) throw new Error(r.status);
       renderPreview(await r.text());
-    }catch(e){ wrap.innerHTML = '<div id="err">Unable to load ' + file + ' (' + e.message + ')</div>'; }
+    }catch(e){ wrap.innerHTML = '<div id="err">Unable to load ' + esc(file) + ' (' + esc(e.message) + ')</div>'; }
     return;
   }
   try{
     const r = await fetch("/code?path=" + encodeURIComponent(path));
     const j = await r.json();
-    if(j.error){ wrap.innerHTML = '<div id="err">' + j.error + '</div>'; return; }
+    if(j.error){ wrap.innerHTML = '<div id="err">' + esc(j.error) + '</div>'; return; }
     diskMtime = j.mtime;
     renderPreview(j.text);
     if(cm){ const cur = cm.getCursor(); cm.setValue(j.text); cm.setCursor(cur); }
     loaded = true; dirty = false; setState("saved", "saved");
-  }catch(e){ wrap.innerHTML = '<div id="err">Server off — ' + e.message + '</div>'; }
+  }catch(e){ wrap.innerHTML = '<div id="err">Server off — ' + esc(e.message) + '</div>'; }
 }
 
 function initEditor(text){
