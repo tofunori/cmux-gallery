@@ -404,9 +404,9 @@ function lbShow(i){
   img.style.display=(isPdf||isMd||isCode)?'none':'';
   pdf.style.display=(isPdf||isMd||isCode)?'':'none';
   lb().classList.toggle('vw', isPdf||isMd||isCode);  // full-window editor/viewer
-  if(isPdf){pdf.src='/.fig_thumbs/pdf_viewer.html?file='+encodeURIComponent(f.rel);img.src='';}
-  else if(isMd){pdf.src='/.fig_thumbs/md_viewer.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&file='+encodeURIComponent(f.rel);img.src='';}
-  else if(isCode){pdf.src='/.fig_thumbs/code_editor.html?path='+encodeURIComponent('__ROOT__/'+f.rel);img.src='';}
+  if(isPdf){pdf.src='/.fig_thumbs/pdf_viewer.html?file='+encodeURIComponent(f.rel)+'&v=__VER__';img.src='';}
+  else if(isMd){pdf.src='/.fig_thumbs/md_viewer.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&file='+encodeURIComponent(f.rel)+'&v=__VER__';img.src='';}
+  else if(isCode){pdf.src='/.fig_thumbs/code_editor.html?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&v=__VER__';img.src='';}
   else{img.src=f.rel+'?v='+f.mtime;pdf.src='';}
   document.getElementById('lbCap').innerHTML=
     `<b>${esc(f.name)}</b><span>${esc(f.folder)}</span><span>${esc(f.mdate)}</span><a href="${escA(f.rel)}" target="_blank">open original</a>`+
@@ -777,6 +777,7 @@ def main():
             .replace("__PROJECT__", project)
             .replace("__COUNT__", f"{len(rows):,}")
             .replace("__GEN__", gen)
+            .replace("__VER__", str(int(time.time())))
             .replace("__DATA__", json.dumps(rows, ensure_ascii=False))
             .replace("__FOLDERS__", json.dumps(folders, ensure_ascii=False))
             .replace("__FAVS__", json.dumps(sorted(cmux_favorites()), ensure_ascii=False))
