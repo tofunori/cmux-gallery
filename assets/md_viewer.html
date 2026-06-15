@@ -10,26 +10,26 @@
 <script src="/.fig_thumbs/cm/mark-selection.min.js"></script>
 <script src="/.fig_thumbs/cm/markdown.min.js"></script>
 <style>
-  html,body{margin:0;height:100%;background:#14171d;color:#e6e8ec;
+  html,body{margin:0;height:100%;background:#18181b;color:#e4e4e7;
        font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
        font-size:15px;line-height:1.6;display:flex;flex-direction:column}
-  header{background:#1a1d24;border-bottom:1px solid #2a2f3a;padding:7px 14px;
+  header{background:#27272a;border-bottom:1px solid #3f3f46;padding:7px 14px;
          display:flex;gap:10px;align-items:center;font-size:12.5px;flex-shrink:0}
   #fname{font-weight:600}
-  header .seg{display:flex;border:1px solid #313640;border-radius:6px;overflow:hidden;flex-shrink:0}
-  header .seg button{background:transparent;border:none;border-right:1px solid #313640;
-         color:#868e9c;padding:0 12px;height:24px;line-height:24px;font-size:11.5px;
+  header .seg{display:flex;border:1px solid #3f3f46;border-radius:6px;overflow:hidden;flex-shrink:0}
+  header .seg button{background:transparent;border:none;border-right:1px solid #3f3f46;
+         color:#a1a1aa;padding:0 12px;height:24px;line-height:24px;font-size:11.5px;
          white-space:nowrap;cursor:pointer;transition:background .12s,color .12s}
   header .seg button:last-child{border-right:none}
-  header .seg button:hover{color:#c9cfda}
-  header .seg button.on{background:#2a3140;color:#fff}
-  #state{color:#9aa3b2;margin-left:4px}
+  header .seg button:hover{color:#e4e4e7}
+  header .seg button.on{background:#52525b;color:#e4e4e7}
+  #state{color:#a1a1aa;margin-left:4px}
   #state.dirty{color:#ffd54a}
   #state.saved{color:#7ec97e}
   #state.conflict{color:#ff6b6b}
-  #hint{margin-left:auto;color:#5a6170;font-size:11.5px}
+  #hint{margin-left:auto;color:#71717a;font-size:11.5px}
   #body{flex:1;display:flex;min-height:0}
-  #edPane{flex:1;min-width:0;display:none;flex-direction:column;border-right:1px solid #2a2f3a}
+  #edPane{flex:1;min-width:0;display:none;flex-direction:column;border-right:1px solid #3f3f46}
   #edPane.show{display:flex}
   .CodeMirror{flex:1;height:auto;font-size:13px;font-family:"SF Mono",Menlo,monospace;line-height:1.55}
   .CodeMirror .CodeMirror-selected{background:transparent !important}
@@ -39,17 +39,17 @@
   #prevPane{flex:1;min-width:0;overflow-y:auto;display:none}
   #prevPane.show{display:block}
   #wrap{max-width:860px;margin:0 auto;padding:24px 36px 60px}
-  h1,h2,h3{line-height:1.3;border-bottom:1px solid #2a2f3a;padding-bottom:6px}
+  h1,h2,h3{line-height:1.3;border-bottom:1px solid #3f3f46;padding-bottom:6px}
   a{color:#5b9dff}
-  code{background:#21252e;padding:2px 5px;border-radius:4px;font-size:13px}
-  pre{background:#1a1d24;border:1px solid #2a2f3a;border-radius:8px;padding:14px;overflow-x:auto}
+  code{background:#1f1f23;padding:2px 5px;border-radius:4px;font-size:13px}
+  pre{background:#1f1f23;border:1px solid #3f3f46;border-radius:8px;padding:14px;overflow-x:auto}
   pre code{background:none;padding:0}
   table{border-collapse:collapse;margin:14px 0;display:block;overflow-x:auto}
-  th,td{border:1px solid #2a2f3a;padding:6px 12px}
-  th{background:#21252e}
-  blockquote{margin:0;padding:2px 16px;border-left:3px solid #5b9dff;color:#9aa3b2}
+  th,td{border:1px solid #3f3f46;padding:6px 12px}
+  th{background:#27272a}
+  blockquote{margin:0;padding:2px 16px;border-left:3px solid #5b9dff;color:#a1a1aa}
   img{max-width:100%}
-  hr{border:none;border-top:1px solid #2a2f3a}
+  hr{border:none;border-top:1px solid #3f3f46}
   #err{color:#ff6b6b;padding:40px;text-align:center}
 </style>
 </head>
