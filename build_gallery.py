@@ -221,6 +221,9 @@ HTML = """<!DOCTYPE html>
   .acts a,.acts button{flex:1;text-align:center;text-decoration:none;font-size:12px;padding:6px 4px;
         background:transparent;border:1px solid #3a3f4a;border-radius:7px;color:#c9cfda;cursor:pointer;transition:.12s}
   .acts a:hover,.acts button:hover{border-color:#5b6575;color:#fff;background:rgba(255,255,255,.04)}
+  .acts .ico{flex:0 0 auto;min-width:34px;padding:6px 8px;font-size:13px;line-height:1}
+  .acts .ico.on{color:#ffce3a;border-color:#ffce3a}
+  .acts .del:hover{color:#ff9a9a;border-color:#7a2a2a;background:rgba(255,80,80,.08)}
   .selbox{position:absolute;top:6px;left:6px;font-size:15px;cursor:pointer;line-height:1;
         background:rgba(15,17,21,.85);border:1px solid #3a3f4a;border-radius:6px;padding:4px 7px;user-select:none;color:#e6e8ec}
   .selbox.on{color:#ff6b6b;border-color:#ff6b6b}
@@ -338,6 +341,7 @@ document.addEventListener('click',e=>{
   const rel=el.dataset.rel, act=el.dataset.act;
   if(act==='fav') toggleFav(rel, el);
   else if(act==='sel') toggleSel(rel, el);
+  else if(act==='del') delOne(rel);
   else if(act==='lb') lbOpen(rel);
   else if(act==='open') openDefault(rel);
   else if(act==='rate') setRate(rel, +el.dataset.n, e);
@@ -391,6 +395,16 @@ function toggleSel(rel, el){
 }
 function openDefault(rel){
   fetch('/open', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({rel})});
+}
+async function delOne(rel){
+  if(!confirm('Move to Trash?\n'+rel)) return;
+  try{
+    const r=await fetch('/delete',{method:'POST',headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({rels:[rel]})});
+    const j=await r.json();
+    (j.deleted||[]).forEach(d=>{ const i=FILES.findIndex(f=>f.rel===d); if(i>=0) FILES.splice(i,1); selSet.delete(d); });
+    updateDelBtn(); render();
+  }catch(e){ alert('Delete failed — is the server running?'); }
 }
 let lbList = [], lbIdx = -1;
 const lb=()=>document.getElementById('lb');
@@ -537,6 +551,8 @@ function render(){
       <div class="acts">
         <button data-act="open" data-rel="${escA(f.rel)}" title="Open with default app">Open</button>
         <button data-act="copy" data-rel="${escA(f.rel)}">Path</button>
+        <button class="ico${isFav?' on':''}" data-act="fav" data-rel="${escA(f.rel)}" title="${isFav?'Remove favorite':'Add favorite'}">${isFav?'★':'☆'}</button>
+        <button class="ico del" data-act="del" data-rel="${escA(f.rel)}" title="Move to Trash">🗑</button>
       </div>
     </div>`;
   }).join('') + (list.length>MAX?`<div class="empty">… and ${list.length-MAX} more. Refine your search to see them.</div>`:'');

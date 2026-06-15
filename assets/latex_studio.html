@@ -24,7 +24,7 @@
   #state.ok{color:#7ec97e}
   #state.dirty{color:#ffd54a}
   #split{flex:1;display:flex;min-height:0}
-  #left{width:50%;display:flex;flex-direction:column;border-right:1px solid #3f3f46;min-width:0}
+  #left{width:50%;display:flex;flex-direction:column;border-right:1px solid #3f3f46;min-width:0;background:#212121}
   #right{flex:1;overflow:auto;background:#1f1f23;position:relative;scrollbar-gutter:stable}
   .CodeMirror{flex:1;height:auto;font-size:13px;font-family:"SF Mono",Menlo,monospace;line-height:1.5}
   .pdfpage{position:relative;margin:10px auto;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.5);cursor:crosshair}
@@ -99,9 +99,16 @@ const setState = (cls, txt) => { stateEl.className = cls; stateEl.textContent = 
 const wrapSel = document.getElementById("wrapSel");
 function applyWrap(v){
   localStorage.setItem("cmWrap", v);
-  if(cm){ cm.setOption("lineWrapping", v !== "off");
-    cm.getWrapperElement().style.maxWidth = /^\d+$/.test(v) ? ("calc(" + v + "ch + 70px)") : "";
-    cm.refresh(); }
+  const fixed = /^\d+$/.test(v);
+  if(cm){
+    const w = cm.getWrapperElement();
+    // gap beside a capped editor stays #212121 (the editor's own colour, set on #left)
+    // instead of a black panel; thin border marks the chosen column
+    w.style.maxWidth = fixed ? ("calc(" + v + "ch + 70px)") : "";
+    w.style.borderRight = fixed ? "1px solid #33384a" : "";
+    cm.setOption("lineWrapping", v !== "off");
+    cm.refresh();
+  }
 }
 wrapSel.value = localStorage.getItem("cmWrap") || "win";
 wrapSel.onchange = () => applyWrap(wrapSel.value);
@@ -313,6 +320,7 @@ function openTarget(target){
 }
 // --- mini explorateur de fichiers (bouton Ouvrir) ---
 const EDITABLE = /\.(tex|sty|bib|py|r|R|md|jl|sh|bash|txt|csv|json|yaml|yml|toml)$/;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 async function pickerShow(dir){
   const r = await fetch("/ls?dir=" + encodeURIComponent(dir || (path ? path.replace(/\/[^/]*$/, "") : "")));
   const j = await r.json();
@@ -328,17 +336,17 @@ async function pickerShow(dir){
   };
   const rec = recentsGet().filter(p => p !== path);
   if(rec.length){
-    rec.forEach(p => mk("&#128337; " + p.split("/").pop() +
-      ' <span style="color:#71717a;font-size:11px">' + p.replace(/^\/Users\/[^/]+\/Documents\//, "").replace(/\/[^/]*$/, "") + "</span>",
+    rec.forEach(p => mk("&#128337; " + esc(p.split("/").pop()) +
+      ' <span style="color:#71717a;font-size:11px">' + esc(p.replace(/^\/Users\/[^/]+\/Documents\//, "").replace(/\/[^/]*$/, "")) + "</span>",
       "", () => openTarget(p)));
     const sep = document.createElement("div");
     sep.style.cssText = "border-bottom:1px solid #3f3f46;margin:4px 0;padding:0;height:1px;cursor:default";
     list.appendChild(sep);
   }
   if(j.parent) mk("&#8617; ..", "d", () => pickerShow(j.parent));
-  j.items.filter(i => i.dir).forEach(i => mk("&#128193; " + i.name, "d", () => pickerShow(j.path + "/" + i.name)));
+  j.items.filter(i => i.dir).forEach(i => mk("&#128193; " + esc(i.name), "d", () => pickerShow(j.path + "/" + i.name)));
   j.items.filter(i => !i.dir && EDITABLE.test(i.name)).forEach(i =>
-    mk(i.name, "", () => openTarget(j.path + "/" + i.name)));
+    mk(esc(i.name), "", () => openTarget(j.path + "/" + i.name)));
 }
 document.getElementById("picker").onclick = e => { if(e.target.id === "picker") e.target.classList.remove("show"); };
 document.addEventListener("keydown", e => { if(e.key === "Escape") document.getElementById("picker").classList.remove("show"); });
