@@ -275,6 +275,18 @@ HTML = """<!DOCTYPE html>
       display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none}
   #lb.annot #annotCv{display:block;cursor:crosshair}
   #lbClose{position:fixed;top:12px;right:18px;font-size:26px;color:#bbb;cursor:pointer;z-index:101}
+  #cmp{position:fixed;inset:0;z-index:120;background:#0b0b0d;display:none;flex-direction:column}
+  #cmp.show{display:flex}
+  #cmpBar{display:flex;gap:12px;align-items:center;padding:7px 14px;background:#18181b;border-bottom:1px solid #3f3f46;font-size:12.5px;color:#a1a1aa;flex-shrink:0}
+  #cmpBar button{background:transparent;border:1px solid #3f3f46;border-radius:6px;color:#c9cfda;padding:4px 10px;font-size:12px;cursor:pointer}
+  #cmpBar button:hover{border-color:#5b6575;color:#fff}
+  #cmpClose{margin-left:auto;font-size:20px;cursor:pointer;color:#bbb;line-height:1}
+  #cmpClose:hover{color:#fff}
+  #cmpInner{flex:1;display:flex;flex-direction:column;gap:3px;min-height:0;padding:3px}
+  #cmpInner.h{flex-direction:row}
+  .cmpCell{flex:1;min-height:0;min-width:0;position:relative;display:flex;align-items:center;justify-content:center;background:#000;border-radius:4px;overflow:hidden}
+  .cmpCell img{max-width:100%;max-height:100%;object-fit:contain}
+  .cmpCell .clbl{position:absolute;top:6px;left:8px;font-size:11px;color:#e4e4e7;background:rgba(0,0,0,.6);padding:2px 7px;border-radius:5px;max-width:88%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   footer{padding:20px;text-align:center;color:var(--muted);font-size:11px}
 </style>
 </head>
@@ -309,6 +321,7 @@ HTML = """<!DOCTYPE html>
     <button id="quoteClear" style="display:none" title="Clear the annotation pending in the Claude statusline">&#9998;&#10005; Annotation</button>
     <button id="rescan" title="Re-run build_figures_index.py and reload">&#8635; Rescan</button>
     <button id="delSel" style="display:none;background:#5c1f1f;border-color:#7a2a2a">&#128465; Delete (0)</button>
+    <button id="cmpSel" style="display:none" title="Show the selected images stacked, to compare">&#9636; Compare (0)</button>
     <span class="count" id="count"></span>
   </div>
 </header>
@@ -330,6 +343,14 @@ HTML = """<!DOCTYPE html>
   <div id="annotNote"><span class="nb">1</span><input type="text" placeholder="Add a comment... (Enter)"><span class="del" title="Delete this annotation">&#128465;</span></div>
   <iframe id="lbPdf" style="display:none;width:94vw;height:86vh;border:none;border-radius:6px;background:#fff"></iframe>
   <div id="lbCap"></div>
+</div>
+<div id="cmp">
+  <div id="cmpBar">
+    <button id="cmpOrient">Layout: stacked</button>
+    <span id="cmpInfo">Esc to close</span>
+    <span id="cmpClose">&#10005;</span>
+  </div>
+  <div id="cmpInner"></div>
 </div>
 <footer>Double-click a thumbnail or "Open" to view the file. This file must stay at the project root for the links to work. Re-run build_figures_index.py to refresh.</footer>
 <script>
@@ -388,6 +409,10 @@ const selSet = new Set();
 function updateDelBtn(){
   const b = document.getElementById('delSel');
   b.style.display = selSet.size ? '' : 'none';
+  const imgs = [...selSet].filter(r => imgExt(r.split('.').pop().toLowerCase()));
+  const c = document.getElementById('cmpSel');
+  c.style.display = imgs.length >= 2 ? '' : 'none';
+  c.textContent = '▤ Compare (' + imgs.length + ')';
   b.textContent = '🗑 Delete (' + selSet.size + ')';
 }
 function toggleSel(rel, el){
@@ -395,6 +420,32 @@ function toggleSel(rel, el){
   else{ selSet.add(rel); el.classList.add('on'); el.textContent='\u25A0'; }
   updateDelBtn();
 }
+// --- compare: stack the selected images (>=2) top/bottom (or side-by-side) ---
+let cmpVert = true;
+function openCompare(){
+  const imgs = [...selSet].filter(r => imgExt(r.split('.').pop().toLowerCase()));
+  if(imgs.length < 2) return;
+  const inner = document.getElementById('cmpInner');
+  inner.className = cmpVert ? '' : 'h';
+  inner.innerHTML = imgs.map(rel => {
+    const f = FILES.find(x => x.rel === rel);
+    const src = rel + (f ? '?v=' + f.mtime : '');
+    return `<div class="cmpCell"><span class="clbl">${esc(rel.split('/').pop())}</span><img src="${escA(src)}" alt=""></div>`;
+  }).join('');
+  document.getElementById('cmpInfo').textContent = imgs.length + ' images · Esc to close';
+  document.getElementById('cmp').classList.add('show');
+}
+function cmpClose(){ document.getElementById('cmp').classList.remove('show'); document.getElementById('cmpInner').innerHTML=''; }
+document.getElementById('cmpSel').onclick = openCompare;
+document.getElementById('cmpClose').onclick = cmpClose;
+document.getElementById('cmpOrient').onclick = function(){
+  cmpVert = !cmpVert;
+  document.getElementById('cmpInner').className = cmpVert ? '' : 'h';
+  this.textContent = cmpVert ? 'Layout: stacked' : 'Layout: side-by-side';
+};
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape' && document.getElementById('cmp').classList.contains('show')) cmpClose();
+});
 function openDefault(rel){
   fetch('/open', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({rel})});
 }
