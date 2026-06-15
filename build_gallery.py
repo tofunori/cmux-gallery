@@ -17,6 +17,22 @@ EXCLUDE_PARTS = {".git", ".venv", ".venv-era5", ".venv-codex", "node_modules",
                  "__pycache__", ".ipynb_checkpoints", "worktrees", ".claude", ".fig_thumbs"}
 ARCHIVE_HINTS = ("_archive", "menage_", "/tmp/", "tmp_dir", "/tmp", "raqdps_tests")
 SELF = "figures_index.html"
+SNIP_EXTS = (".py", ".r", ".jl", ".sh", ".tex", ".md", ".csv")
+
+
+def read_snippet(path, max_lines=14, max_chars=700):
+    """First lines of a text/code file, for an inline card preview."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            out = []
+            for _ in range(max_lines):
+                ln = f.readline()
+                if not ln:
+                    break
+                out.append(ln.rstrip("\n"))
+        return "\n".join(out)[:max_chars]
+    except OSError:
+        return None
 
 
 def cmux_favorites():
@@ -101,6 +117,7 @@ def scan():
                     thumb = ".fig_thumbs/" + key + ".png"
             rows.append({
                 "thumb": thumb,
+                "snippet": read_snippet(full) if ext in SNIP_EXTS else None,
                 "name": fn,
                 "rel": rel,
                 "folder": os.path.dirname(rel) or ".",
@@ -190,6 +207,10 @@ HTML = """<!DOCTYPE html>
   .ph{height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center;
       background:var(--card2);color:var(--muted);gap:6px}
   .ph .ext{font-size:30px;font-weight:700;letter-spacing:1px}
+  .snip{height:150px;overflow:hidden;background:var(--card2);padding:9px 11px;
+        font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:8.5px;
+        line-height:1.4;color:#9aa6b6;white-space:pre;tab-size:2;
+        -webkit-mask-image:linear-gradient(#000 72%,transparent);mask-image:linear-gradient(#000 72%,transparent)}
   .meta{padding:10px 12px;display:flex;flex-direction:column;gap:5px;flex:1}
   .nm{font-size:13px;font-weight:600;word-break:break-word;line-height:1.3}
   .fld{font-size:11px;color:var(--muted);word-break:break-all}
@@ -492,7 +513,9 @@ function render(){
   const slice=list.slice(0,MAX);
   grid.innerHTML = slice.map(f=>{
     const tsrc = imgExt(f.ext) ? f.rel+'?v='+f.mtime : (f.thumb||null);
-    const thumb = tsrc
+    const thumb = f.snippet
+      ? `<div class="snip">${esc(f.snippet)}</div>`
+      : tsrc
       ? `<div class="thumb"><img loading="lazy" src="${escA(tsrc)}" alt=""></div>`
       : `<div class="ph"><span class="ext">${esc(f.ext.toUpperCase())}</span><span style="font-size:11px">no preview</span></div>`;
     const arch = f.archive?`<span class="tag archive">archive</span>`:'';

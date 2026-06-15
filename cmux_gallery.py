@@ -15,6 +15,7 @@ Subcommands:
     run     build + start the server + open the gallery in cmux (foreground)
 """
 import argparse
+import hashlib
 import http.client
 import os
 import shutil
@@ -31,7 +32,14 @@ VIEWERS = ("pdf_viewer.html", "md_viewer.html", "code_editor.html", "latex_studi
 OUT = "figures_index.html"
 
 
-DEFAULT_PORT = 8790  # stable, bookmarkable URL; falls back to a free port if busy
+PORT_BASE = 8790  # each project gets a stable port derived from its path
+
+
+def project_port(root: str) -> int:
+    """A stable, per-project port (same project → same URL, bookmarkable;
+    different projects coexist on different ports)."""
+    h = int(hashlib.md5(os.path.realpath(root).encode()).hexdigest(), 16)
+    return PORT_BASE + (h % 1000)  # 8790–9789
 
 
 def free_port() -> int:
@@ -54,17 +62,18 @@ def _port_busy(port: int) -> bool:
 
 
 def provision_viewers(root: str) -> None:
-    """Copy the bundled lightbox viewers into <root>/.fig_thumbs/ (served by the server)."""
+    """Copy every bundled viewer asset (the *.html viewers + cm/, pdfjs/,
+    marked.min.js …) into <root>/.fig_thumbs/, where the server serves them.
+    Files are refreshed each build; large vendor dirs are copied once."""
     td = os.path.join(root, ".fig_thumbs")
     os.makedirs(td, exist_ok=True)
-    for v in VIEWERS:
-        src = os.path.join(ASSETS, v)
-        if os.path.exists(src):
-            shutil.copy2(src, os.path.join(td, v))
-    pdfjs_src = os.path.join(ASSETS, "pdfjs")  # the PDF viewer's pdf.js bundle (~4 MB)
-    pdfjs_dst = os.path.join(td, "pdfjs")
-    if os.path.isdir(pdfjs_src) and not os.path.isdir(pdfjs_dst):
-        shutil.copytree(pdfjs_src, pdfjs_dst)
+    for name in os.listdir(ASSETS):
+        src, dst = os.path.join(ASSETS, name), os.path.join(td, name)
+        if os.path.isdir(src):
+            if not os.path.isdir(dst):
+                shutil.copytree(src, dst)
+        else:
+            shutil.copy2(src, dst)
 
 
 def build(root: str) -> str:
@@ -97,13 +106,10 @@ def cmd_build(a) -> None:
 def cmd_run(a) -> None:
     out = build(a.root)
     print(f"[cmux-gallery] built {out}")
-    if a.port == 0:
+    port = a.port or project_port(a.root)
+    if _port_busy(port):
+        print(f"[cmux-gallery] port {port} busy → using a free port", file=sys.stderr)
         port = free_port()
-    else:
-        port = a.port
-        if _port_busy(port):
-            print(f"[cmux-gallery] port {port} busy → using a free port", file=sys.stderr)
-            port = free_port()
     env = dict(os.environ, FIG_PORT=str(port), GALLERY_ROOT=a.root)
     print(f"[cmux-gallery] starting server on :{port}  (cwd={a.root})")
     srv = subprocess.Popen([sys.executable, SERVER], cwd=a.root, env=env)
@@ -133,8 +139,8 @@ def main(argv=None) -> int:
     b.add_argument("--root", default=os.getcwd(), type=os.path.abspath)
     r = sub.add_parser("run", help="build + start server + open in cmux (foreground)")
     r.add_argument("--root", default=os.getcwd(), type=os.path.abspath)
-    r.add_argument("--port", type=int, default=DEFAULT_PORT,
-                   help=f"server port (default {DEFAULT_PORT}; 0 = random free port)")
+    r.add_argument("--port", type=int, default=0,
+                   help="server port (default: a stable port derived from the project path)")
     a = p.parse_args(argv)
     {"build": cmd_build, "run": cmd_run}[a.cmd](a)
     return 0
