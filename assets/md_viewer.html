@@ -71,7 +71,7 @@
 </div>
 <script>
 const params = new URLSearchParams(location.search);
-// path = chemin absolu (pour /code + /codesave) ; file = chemin relatif (pour <base> images)
+// path = absolute path (for /code + /codesave); file = relative path (for <base> images)
 const path = params.get("path");
 const file = params.get("file") || "";
 const wrap = document.getElementById("wrap");
@@ -161,7 +161,7 @@ async function save(){
 const edPane = document.getElementById("edPane"), prevPane = document.getElementById("prevPane");
 const btns = {prev: document.getElementById("mPrev"), split: document.getElementById("mSplit"), edit: document.getElementById("mEdit")};
 function setMode(m){
-  if((m === "split" || m === "edit") && !path){ return; } // pas de chemin absolu → pas d'edition
+  if((m === "split" || m === "edit") && !path){ return; } // no absolute path -> no editing
   Object.values(btns).forEach(b => b.classList.remove("on"));
   btns[m].classList.add("on");
   edPane.classList.toggle("show", m === "split" || m === "edit");
