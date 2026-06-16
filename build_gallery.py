@@ -346,7 +346,7 @@ HTML = """<!DOCTYPE html>
     <span class="chip" data-ext="png">PNG</span>
     <span class="chip" data-ext="pdf">PDF</span>
     <span class="chip" data-ext="svg" title="Vector plots — open one to select its elements">&#9672; SVG</span>
-    <span class="chip" data-ext="mp4" title="Videos (mp4 / mov / webm) — play in the lightbox">&#9654; Video</span>
+    <span class="chip" data-ext="mp4" title="Videos (mp4 / mov / webm) — play in the lightbox">.mp4</span>
     <span class="chip" id="fmtChip">Formats &#9662;</span>
     <div id="fmtMenu"></div>
     <span class="chip on" id="archChip">Include archives</span>
