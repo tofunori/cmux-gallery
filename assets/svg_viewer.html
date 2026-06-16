@@ -13,11 +13,10 @@
   #cur{margin-left:auto;color:#5b9dff;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;
        max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #body{flex:1;display:flex;min-height:0}
-  #stagewrap{flex:1;overflow:auto}
-  #stage{position:relative;min-height:100%;display:flex;align-items:flex-start;justify-content:center;
-         padding:16px;box-sizing:border-box}
-  #plot{position:relative;line-height:0}
-  #plot svg{max-width:100%;height:auto;background:#fff;border-radius:6px;box-shadow:0 2px 14px rgba(0,0,0,.5)}
+  #stagewrap{flex:1;overflow:auto;padding:16px;box-sizing:border-box}
+  #stage{position:relative;width:100%}
+  #plot{width:100%;line-height:0}
+  #plot svg{width:100%;height:auto;display:block;background:#fff;border-radius:6px;box-shadow:0 2px 14px rgba(0,0,0,.5)}
   #plot svg *{cursor:pointer}
   #ov{position:absolute;inset:0;pointer-events:none}
   .hbox{position:absolute;border:2px solid #5b9dff;border-radius:2px;background:rgba(91,157,255,.10)}
@@ -131,10 +130,14 @@ async function load(){
   try{
     const r = await fetch("/" + file.split("/").map(encodeURIComponent).join("/"));
     if(!r.ok) throw new Error(r.status);
-    plot.innerHTML = await r.text();
-    svg = plot.querySelector("svg");
-    if(!svg) throw new Error("no <svg> root");
-    svg.removeAttribute("width"); svg.removeAttribute("height");   // size responsively via CSS + viewBox
+    const txt = await r.text();
+    // DOMParser handles the <?xml?> + <!DOCTYPE> prefix that innerHTML mangles; CSS sizes it via viewBox
+    const doc = new DOMParser().parseFromString(txt, "image/svg+xml");
+    const root = doc.querySelector("svg");
+    if(!root || doc.querySelector("parsererror")) throw new Error("could not parse SVG");
+    svg = document.importNode(root, true);
+    plot.textContent = "";
+    plot.appendChild(svg);
     svg.addEventListener("mousemove", e => showHover(meaningful(e.target)));
     svg.addEventListener("mouseleave", () => showHover(null));
     svg.addEventListener("click", e => { const g = meaningful(e.target); if(g) toggle(g); });
