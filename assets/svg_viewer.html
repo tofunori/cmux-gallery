@@ -128,7 +128,8 @@ document.getElementById("send").onclick = () => {
 
 async function load(){
   try{
-    const r = await fetch("/" + file.split("/").map(encodeURIComponent).join("/"));
+    const ver = new URLSearchParams(location.search).get("v") || "";
+    const r = await fetch("/" + file.split("/").map(encodeURIComponent).join("/") + (ver ? "?v=" + ver : ""));
     if(!r.ok) throw new Error(r.status);
     const txt = await r.text();
     // DOMParser handles the <?xml?> + <!DOCTYPE> prefix that innerHTML mangles; CSS sizes it via viewBox
