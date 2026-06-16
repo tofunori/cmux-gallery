@@ -19,6 +19,17 @@ ARCHIVE_HINTS = ("_archive", "menage_", "/tmp/", "tmp_dir", "/tmp", "raqdps_test
 SELF = "figures_index.html"
 SNIP_EXTS = (".py", ".r", ".jl", ".sh", ".tex", ".md", ".csv")
 
+# Animation-frame directories: hundreds of sequential stills (f000.png, frame_0001.png…).
+# Hidden from the gallery by default — the playable .mp4/.gif/.html is the artifact, not the
+# individual frames. Set GALLERY_SHOW_FRAMES=1 to index them anyway.
+SHOW_FRAMES = bool(os.environ.get("GALLERY_SHOW_FRAMES"))
+
+def is_frames_dir(name):
+    n = name.lower()
+    return (n in ("frames", "frame", "animations", "animation")
+            or n.endswith(("_frames", "_frame", "_animations", "_animation"))
+            or "html_frames" in n)
+
 
 def read_snippet(path, max_lines=14, max_chars=700):
     """First lines of a text/code file, for an inline card preview."""
@@ -96,6 +107,8 @@ def scan():
         if set(dirpath.split(os.sep)) & EXCLUDE_PARTS:
             dirnames[:] = []
             continue
+        if not SHOW_FRAMES:                       # don't descend into animation-frame dirs
+            dirnames[:] = [d for d in dirnames if not is_frames_dir(d)]
         for fn in filenames:
             ext = os.path.splitext(fn)[1].lower()
             if ext not in EXTS or fn == SELF:
