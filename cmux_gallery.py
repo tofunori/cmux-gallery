@@ -168,6 +168,41 @@ def cmd_run(a) -> None:
             srv.kill()
 
 
+def cmd_serve(a) -> None:
+    """Build, then HOST the server in the foreground and keep it alive (self-healing).
+
+    Unlike `run`, this never reuses-and-exits — it IS the host. No browser tab is
+    opened. Ideal for a cmux Dock control or a long-lived pane: the server lives as
+    long as this process, and restarts itself if it ever dies."""
+    out = build(a.root)
+    print(f"[cmux-gallery] built {out}")
+    port = a.port or project_port(a.root)
+    env = dict(os.environ, FIG_PORT=str(port), GALLERY_ROOT=a.root)
+    print(f"[cmux-gallery] serving http://127.0.0.1:{port}/{OUT}  "
+          f"(cwd={a.root}; hosting; self-healing; Ctrl-C to stop)")
+    srv = None
+    def _stop(*_):
+        if srv:
+            srv.terminate()
+        sys.exit(0)
+    signal.signal(signal.SIGTERM, _stop)
+    try:
+        while True:
+            srv = subprocess.Popen([sys.executable, SERVER], cwd=a.root, env=env)
+            srv.wait()
+            print("[cmux-gallery] server exited — restarting in 2s", file=sys.stderr)
+            time.sleep(2)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if srv:
+            srv.terminate()
+            try:
+                srv.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                srv.kill()
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="cmux-gallery", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -181,8 +216,12 @@ def main(argv=None) -> int:
     r.add_argument("--no-open", dest="open", action="store_false",
                    help="start (or reuse) the server without opening a cmux browser tab — "
                         "for a Dock control that just keeps the server alive at launch")
+    s = sub.add_parser("serve", help="build + HOST the server, self-healing, no browser (for a Dock control)")
+    s.add_argument("--root", default=os.getcwd(), type=os.path.abspath)
+    s.add_argument("--port", type=int, default=0,
+                   help="server port (default: a stable port derived from the project path)")
     a = p.parse_args(argv)
-    {"build": cmd_build, "run": cmd_run}[a.cmd](a)
+    {"build": cmd_build, "run": cmd_run, "serve": cmd_serve}[a.cmd](a)
     return 0
 
 

@@ -3,9 +3,9 @@
     {
       "id": "gallery",
       "title": "Project Gallery",
-      "command": "cmux-gallery run --root .",
+      "command": "cmux-gallery serve --root .",
       "cwd": ".",
-      "height": 260
+      "height": 200
     }
   ]
 }

@@ -32,39 +32,65 @@ open   → cmux browser open http://127.0.0.1:<port>/figures_index.html
 
 ```bash
 git clone https://github.com/tofunori/cmux-gallery.git ~/tools/cmux-gallery
-ln -s ~/tools/cmux-gallery/cmux_gallery.py ~/.local/bin/cmux-gallery
-chmod +x ~/tools/cmux-gallery/cmux_gallery.py
+bash ~/tools/cmux-gallery/install.sh
 ```
 
-`build` needs only the Python 3 standard library. `run` needs the `cmux` CLI.
-Thumbnails use macOS `qlmanage` (skipped gracefully elsewhere).
+`install.sh` links `cmux-gallery` into `~/.local/bin`, checks it is on your `PATH`
+(and shows how to add it if not), and verifies `python3` + `cmux`. Manual
+equivalent: `ln -s …/cmux_gallery.py ~/.local/bin/cmux-gallery && chmod +x …`.
+
+`build` needs only the Python 3 standard library; `run`/`serve` need the `cmux`
+CLI. Thumbnails use macOS `qlmanage` (skipped gracefully elsewhere).
 
 ## Use
 
 ```bash
 cmux-gallery run                 # build + serve + open in cmux (keep the pane open)
-cmux-gallery run --port 8790     # pin the port (default 8790 → stable, bookmarkable URL)
+cmux-gallery serve               # build + HOST the server, self-healing, no browser tab
 cmux-gallery run --root /path    # a specific project (default: current dir)
 cmux-gallery build               # just write the HTML + viewers (no server)
 ```
 
-The gallery is then a normal web page at `http://127.0.0.1:8790/figures_index.html`
-— open it in any browser (cmux or system) and bookmark it.
+Each project gets a **stable port** derived from its path (8790–9789), so the URL
+is the same every time — open it in any browser (cmux or system) and bookmark it,
+e.g. `http://127.0.0.1:8790/figures_index.html`. Pin one with `--port <n>`.
 
 ### As a cmux command / Dock control
 
 - **Command Palette / + menu**: copy the `actions` + `commands` from
   [`cmux.example.json`](./cmux.example.json) into `~/.config/cmux/cmux.json`,
   then run **Project Gallery**.
-- **Dock** (server runs in the sidebar, can't be closed by accident): copy
-  [`dock.example.json`](./dock.example.json) into the project's `.cmux/dock.json`.
+- **Dock** (recommended): copy [`dock.example.json`](./dock.example.json) into the
+  project's `.cmux/dock.json`. It runs `cmux-gallery serve`, which **hosts** the
+  server, restarts it if it dies, and auto-starts when cmux launches.
+
+## Keeping it running
+
+The server lives only as long as its host process. Pick one:
+
+- **A cmux Dock control or pane (recommended).** `cmux-gallery serve` hosts the
+  server and self-heals; in the Dock it also auto-starts with cmux. Because it
+  runs *inside cmux* it inherits cmux's file access — which matters on macOS:
+
+  > **Don't use a launchd LaunchAgent for a project under `~/Documents`,
+  > `~/Desktop`, `~/Downloads` or iCloud Drive.** macOS **TCC** blocks background
+  > launchd processes from reading those folders, so an "always-on" agent there
+  > starts but returns **404 for every file** (it binds the socket but can't read
+  > your files) unless you grant its `python3` **Full Disk Access**. The
+  > cmux-hosted server avoids this entirely.
+
+- **A plain terminal:** `cmux-gallery run` (or `serve`) in a pane you keep open.
+
+To run it even when cmux is closed: move the project outside those protected
+folders, or grant Full Disk Access to your `python3` and launch `cmux-gallery
+serve` from a LaunchAgent.
 
 ## Configuration
 
 | flag / env | meaning |
 |---|---|
 | `--root <dir>` | project to scan (default: current dir) |
-| `--port <n>` | server port (default 8790; 0 = random free port) |
+| `--port <n>` | server port (default: a stable per-project port 8790–9789; 0 = random) |
 | `GALLERY_TITLE` | header wordmark (default `Gallery`) |
 | `GALLERY_NO_THUMBS=1` | skip Quick-Look thumbnail generation |
 
