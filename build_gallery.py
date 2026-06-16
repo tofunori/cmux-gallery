@@ -385,7 +385,7 @@ document.addEventListener('click',e=>{
   const el=e.target.closest('[data-act]'); if(!el) return;
   const rel=el.dataset.rel, act=el.dataset.act;
   if(act==='fav') toggleFav(rel, el);
-  else if(act==='sel') toggleSel(rel, el);
+  else if(act==='sel') toggleSel(rel, el, e);
   else if(act==='hide') toggleHide(rel);
   else if(act==='del') delOne(rel);
   else if(act==='lb') lbOpen(rel);
@@ -437,6 +437,8 @@ const rateRow = rel => {
 let onlyFavs = false;
 let rateMin = 0;
 const selSet = new Set();
+let lastSelRel = null;     // anchor for Shift-click range selection
+let renderedRels = [];     // rels in current display order (for range math)
 function updateDelBtn(){
   const b = document.getElementById('delSel');
   b.style.display = selSet.size ? '' : 'none';
@@ -450,9 +452,21 @@ function updateDelBtn(){
   h.textContent = 'Hide (' + selSet.size + ')';
   b.textContent = '🗑 Delete (' + selSet.size + ')';
 }
-function toggleSel(rel, el){
+function toggleSel(rel, el, e){
+  // Shift-click selects every card between the last-clicked one and this one (display order).
+  if(e && e.shiftKey && lastSelRel && lastSelRel!==rel){
+    const a = renderedRels.indexOf(lastSelRel), b = renderedRels.indexOf(rel);
+    if(a>=0 && b>=0){
+      const lo = Math.min(a,b), hi = Math.max(a,b);
+      const turnOn = !selSet.has(rel);                 // range follows the target's new state
+      for(let i=lo;i<=hi;i++){ if(turnOn) selSet.add(renderedRels[i]); else selSet.delete(renderedRels[i]); }
+      if(window.getSelection) window.getSelection().removeAllRanges();   // drop the blue text-drag
+      updateDelBtn(); render(); return;   // anchor stays at the last plain click, so you can re-adjust the endpoint
+    }
+  }
   if(selSet.has(rel)){ selSet.delete(rel); el.classList.remove('on'); el.textContent='\u25A2'; }
   else{ selSet.add(rel); el.classList.add('on'); el.textContent='\u25A0'; }
+  lastSelRel = rel;
   updateDelBtn();
 }
 // --- compare: stack the selected images (>=2) top/bottom (or side-by-side) ---
@@ -650,9 +664,10 @@ function render(){
   document.getElementById('count').textContent = list.length+' / '+FILES.length+' figures';
   lbList = list.filter(f=>imgExt(f.ext)||f.ext==='pdf'||f.ext==='md'||codeExt(f.ext));
   const grid=document.getElementById('grid');
-  if(!list.length){grid.innerHTML='<div class="empty">No matching files.</div>';return;}
+  if(!list.length){grid.innerHTML='<div class="empty">No matching files.</div>';renderedRels=[];return;}
   const MAX=600;
   const slice=list.slice(0,MAX);
+  renderedRels = slice.map(f=>f.rel);   // display order for Shift-click range selection
   grid.innerHTML = slice.map(f=>{
     const isImg = imgExt(f.ext);
     // images: light downscaled thumbnail from the server (full-res stays in the lightbox);
@@ -671,7 +686,7 @@ function render(){
     const isHid = hidden.has(f.rel);
     const hidTag = isHid?`<span class="tag hid">hidden</span>`:'';
     return `<div class="card ${f.archive?'arch':''} ${isHid?'hid':''}">
-      <span class="selbox ${selSet.has(f.rel)?'on':''}" data-act="sel" data-rel="${escA(f.rel)}" title="Select for bulk delete">${selSet.has(f.rel)?'■':'▢'}</span>
+      <span class="selbox ${selSet.has(f.rel)?'on':''}" data-act="sel" data-rel="${escA(f.rel)}" title="Select — Shift-click to select a range">${selSet.has(f.rel)?'■':'▢'}</span>
       ${(imgExt(f.ext)||f.ext==='pdf'||f.ext==='md'||codeExt(f.ext))?`<div data-act="lb" data-rel="${escA(f.rel)}" style="cursor:zoom-in">${f.ext==='svg'?'<span class="svgbadge">◈ select</span>':''}${thumb}</div>`:appExt(f.ext)?`<div data-act="open" data-rel="${escA(f.rel)}" style="cursor:pointer" title="Open with default app">${thumb}</div>`:`<a href="${escA(f.rel)}" target="_blank" style="text-decoration:none">${thumb}</a>`}
       <div class="meta">
         <div class="nm">${esc(f.name)}</div>
