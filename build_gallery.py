@@ -436,7 +436,7 @@ const saveRatings = ()=>{localStorage.setItem('figRatings', JSON.stringify(ratin
 fetch('/state').then(r=>r.json()).then(st=>{
   (st.favs||[]).forEach(f=>favs.add(f));
   Object.assign(ratings, st.ratings||{});
-  (st.hidden||[]).forEach(h=>hidden.add(h));
+  hidden = new Set(st.hidden||[]);   // server (.fig_state.json) is authoritative — else localStorage resurrects un-hidden files
   localStorage.setItem('figFavs', JSON.stringify([...favs]));
   localStorage.setItem('figRatings', JSON.stringify(ratings));
   localStorage.setItem('figHidden', JSON.stringify([...hidden]));
