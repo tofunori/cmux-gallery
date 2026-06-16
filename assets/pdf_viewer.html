@@ -97,8 +97,8 @@ function buildTextLayer(tc, tl, vp){
   }
 }
 
-// Ordre de lecture par colonnes : trouve la gouttiere verticale (bande en x
-// traversee par presque aucun span) et trie colonne par colonne, puis (y, x).
+// Column reading order: find the vertical gutter (an x band crossed by almost
+// no span) and sort column by column, then (y, x).
 function readingOrder(tl, pageW){
   const spans = [...tl.querySelectorAll("span")].filter(s => s.textContent.trim());
   const boxes = spans.map(s => ({s,
@@ -147,7 +147,7 @@ function updateSelInfo(){
   pushSelInfo(rows.size, words, hl.map(s=>s.textContent).join(" ").replace(/\s+/g," ").trim());
 }
 function spanAt(tl, x, y){
-  // span sous le pointeur, sinon le plus proche sur la meme ligne
+  // span under the pointer, else the nearest one on the same line
   const el = document.elementFromPoint(x, y);
   if(el && el.tagName === "SPAN" && el.closest(".textLayer") === tl && el.textContent.trim()) return el;
   let best = null, bd = 1e9;
