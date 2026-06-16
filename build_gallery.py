@@ -616,11 +616,17 @@ function render(){
   const MAX=600;
   const slice=list.slice(0,MAX);
   grid.innerHTML = slice.map(f=>{
-    const tsrc = imgExt(f.ext) ? f.rel+'?v='+f.mtime : (f.thumb||null);
+    const isImg = imgExt(f.ext);
+    // images: light downscaled thumbnail from the server (full-res stays in the lightbox);
+    // pdf/office: build-time qlmanage thumb. onerror falls back to the original if /thumb is unavailable.
+    const tsrc = isImg ? '/thumb?path='+encodeURIComponent('__ROOT__/'+f.rel)+'&w=480&v='+f.mtime : (f.thumb||null);
+    const imgTag = isImg
+      ? `<img loading="lazy" decoding="async" src="${escA(tsrc)}" data-full="${escA(f.rel)}?v=${f.mtime}" onerror="this.onerror=null;this.src=this.dataset.full" alt="">`
+      : `<img loading="lazy" decoding="async" src="${escA(tsrc)}" alt="">`;
     const thumb = f.snippet
       ? `<div class="snip">${esc(f.snippet)}</div>`
       : tsrc
-      ? `<div class="thumb"><img loading="lazy" src="${escA(tsrc)}" alt=""></div>`
+      ? `<div class="thumb">${imgTag}</div>`
       : `<div class="ph"><span class="ext">${esc(f.ext.toUpperCase())}</span><span style="font-size:11px">no preview</span></div>`;
     const arch = f.archive?`<span class="tag archive">archive</span>`:'';
     const isFav = favs.has(f.rel);

@@ -6,7 +6,9 @@ copies the path to the clipboard, and pastes it into the Claude Code panel of th
 active cmux workspace if there is one.
 """
 import base64
+import hashlib
 import json
+import mimetypes
 import os
 import re
 import subprocess
@@ -149,7 +151,49 @@ class Handler(SimpleHTTPRequestHandler):
             return full
         return os.path.join(root, "__forbidden_symlink_escape__")  # nonexistent -> 404
 
+    def _serve_file(self, path):
+        try:
+            with open(path, "rb") as f:
+                data = f.read()
+        except OSError:
+            return self._respond(404, {"error": "not found"})
+        ctype = mimetypes.guess_type(path)[0] or "application/octet-stream"
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "max-age=86400")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(data)
+
     def do_GET(self):
+        # On-demand downscaled thumbnail for grid cards (keeps full-res images out of
+        # the browser: a 4320px plot decodes to ~38MB; its 480px thumb to ~0.5MB).
+        # The lightbox still loads the full original, so viewing quality is unchanged.
+        if self.path.startswith("/thumb?"):
+            try:
+                from urllib.parse import parse_qs, urlparse
+                q = parse_qs(urlparse(self.path).query)
+                src = self._safe_path(q.get("path", [""])[0])
+                if not src or not os.path.isfile(src):
+                    return self._respond(404, {"error": "not found"})
+                try:
+                    w = max(64, min(2000, int(q.get("w", ["480"])[0])))
+                except ValueError:
+                    w = 480
+                key = hashlib.md5((os.path.realpath(src) + ":" + str(int(os.path.getmtime(src))) + ":" + str(w)).encode()).hexdigest()
+                td = os.path.join(PROJECT, ".fig_thumbs")
+                os.makedirs(td, exist_ok=True)
+                out = os.path.join(td, "imgthumb_" + key + ".png")
+                if not os.path.exists(out):
+                    try:
+                        subprocess.run(["sips", "-Z", str(w), "-s", "format", "png", src, "--out", out],
+                                       capture_output=True, timeout=20, check=True)
+                    except Exception:
+                        out = src  # sips missing/failed -> serve the original (correct, just not downscaled)
+                return self._serve_file(out)
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
         if self.path.startswith("/ls?"):
             try:
                 from urllib.parse import parse_qs, urlparse
