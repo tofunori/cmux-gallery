@@ -191,8 +191,6 @@ HTML = """<!DOCTYPE html>
   .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:20px;
         border:1px solid var(--border);background:var(--card);cursor:pointer;user-select:none;font-size:12px}
   .chip.off{opacity:.4}
-  .svgbadge{position:absolute;top:8px;right:8px;z-index:3;background:rgba(91,157,255,.92);color:#fff;
-        font-size:10px;font-weight:600;padding:2px 7px;border-radius:11px;pointer-events:none;letter-spacing:.2px}
   #fmtMenu{position:absolute;z-index:50;display:none;flex-direction:column;gap:2px;margin-top:6px;
       background:#27272a;border:1px solid #3f3f46;border-radius:10px;padding:8px;min-width:140px;
       box-shadow:0 8px 28px rgba(0,0,0,.5)}
@@ -687,7 +685,7 @@ function render(){
     const hidTag = isHid?`<span class="tag hid">hidden</span>`:'';
     return `<div class="card ${f.archive?'arch':''} ${isHid?'hid':''}">
       <span class="selbox ${selSet.has(f.rel)?'on':''}" data-act="sel" data-rel="${escA(f.rel)}" title="Select — Shift-click to select a range">${selSet.has(f.rel)?'■':'▢'}</span>
-      ${(imgExt(f.ext)||f.ext==='pdf'||f.ext==='md'||codeExt(f.ext))?`<div data-act="lb" data-rel="${escA(f.rel)}" style="cursor:zoom-in">${f.ext==='svg'?'<span class="svgbadge">◈ select</span>':''}${thumb}</div>`:appExt(f.ext)?`<div data-act="open" data-rel="${escA(f.rel)}" style="cursor:pointer" title="Open with default app">${thumb}</div>`:`<a href="${escA(f.rel)}" target="_blank" style="text-decoration:none">${thumb}</a>`}
+      ${(imgExt(f.ext)||f.ext==='pdf'||f.ext==='md'||codeExt(f.ext))?`<div data-act="lb" data-rel="${escA(f.rel)}" style="cursor:zoom-in">${thumb}</div>`:appExt(f.ext)?`<div data-act="open" data-rel="${escA(f.rel)}" style="cursor:pointer" title="Open with default app">${thumb}</div>`:`<a href="${escA(f.rel)}" target="_blank" style="text-decoration:none">${thumb}</a>`}
       <div class="meta">
         <div class="nm">${esc(f.name)}</div>
         ${rateRow(f.rel)}
