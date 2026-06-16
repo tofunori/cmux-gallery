@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Petit serveur local pour la galerie de figures (port 8787).
+"""Local server for the figure gallery (port from FIG_PORT, default 8790).
 
-POST /save  {name, dataURL}  -> écrit le PNG annoté dans <projet>/annotations/,
-copie le chemin dans le presse-papier, et le colle dans le panneau Claude Code
-du workspace cmux actif s'il y en a un.
+POST /save  {name, dataURL}  -> writes the annotated PNG to <project>/annotations/,
+copies the path to the clipboard, and pastes it into the Claude Code panel of the
+active cmux workspace if there is one.
 """
 import base64
 import json
@@ -17,12 +17,12 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 PROJECT = os.path.realpath(os.environ.get("GALLERY_ROOT") or os.getcwd())
 OUT_DIR = os.path.join(PROJECT, "annotations")
-PORT = int(os.environ.get("FIG_PORT", 8787))
+PORT = int(os.environ.get("FIG_PORT", 8790))
 
 
 def find_tex_root(p):
-    """Document racine d'un fichier .tex : lui-même s'il a \\documentclass,
-    sinon directive % !TEX root, sinon un .tex voisin/parent qui l'inclut."""
+    """Root document of a .tex file: itself if it has \\documentclass,
+    else the % !TEX root directive, else a sibling/parent .tex that includes it."""
     try:
         txt = open(p, encoding="utf-8", errors="replace").read()
     except Exception:
