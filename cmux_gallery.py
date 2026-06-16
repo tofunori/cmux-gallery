@@ -20,6 +20,7 @@ import http.client
 import json
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -85,14 +86,14 @@ def server_project(port: int):
 def provision_viewers(root: str) -> None:
     """Copy every bundled viewer asset (the *.html viewers + cm/, pdfjs/,
     marked.min.js …) into <root>/.fig_thumbs/, where the server serves them.
-    Files are refreshed each build; large vendor dirs are copied once."""
+    Both files and vendor dirs are refreshed each build so a tool upgrade ships
+    new CodeMirror/pdf.js to existing projects (was: dirs copied once = stale)."""
     td = os.path.join(root, ".fig_thumbs")
     os.makedirs(td, exist_ok=True)
     for name in os.listdir(ASSETS):
         src, dst = os.path.join(ASSETS, name), os.path.join(td, name)
         if os.path.isdir(src):
-            if not os.path.isdir(dst):
-                shutil.copytree(src, dst)
+            shutil.copytree(src, dst, dirs_exist_ok=True)
         else:
             shutil.copy2(src, dst)
 
@@ -146,6 +147,7 @@ def cmd_run(a) -> None:
         port = free_port()
     env = dict(os.environ, FIG_PORT=str(port), GALLERY_ROOT=a.root)
     print(f"[cmux-gallery] starting server on :{port}  (cwd={a.root})")
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))  # SIGTERM -> SystemExit -> finally tears down the server (no orphan)
     srv = subprocess.Popen([sys.executable, SERVER], cwd=a.root, env=env)
     try:
         if not wait_up(port):

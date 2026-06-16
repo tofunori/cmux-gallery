@@ -49,6 +49,7 @@ def cmux_favorites():
 
 
 THUMB_DIR = os.path.join(ROOT, ".fig_thumbs")
+NO_THUMBS = bool(os.environ.get("GALLERY_NO_THUMBS"))  # skip qlmanage thumbnails (PDF/Office) for speed
 
 def thumb_key(rel, mtime):
     return hashlib.md5(f"{rel}:{mtime}".encode()).hexdigest()
@@ -107,7 +108,7 @@ def scan():
                 continue
             low = rel.lower()
             thumb = None
-            if ext in (".pdf", ".docx", ".xlsx", ".xls"):
+            if ext in (".pdf", ".docx", ".xlsx", ".xls") and not NO_THUMBS:
                 key = thumb_key(rel, int(st.st_mtime))
                 keys_seen.add(key)
                 if os.path.exists(os.path.join(THUMB_DIR, key + ".png")):
@@ -884,6 +885,13 @@ def main():
             .replace("__FOLDERS__", json.dumps(folders, ensure_ascii=False).replace("</", "<\\/"))
             .replace("__FAVS__", json.dumps(sorted(cmux_favorites()), ensure_ascii=False).replace("</", "<\\/"))
             .replace("__ROOT__", root_js))
+    # regression guard: the page is ONE inline <script>; an unescaped </script> in
+    # embedded data (snippet/name/path) would close it early and blank the whole gallery.
+    # The </ -> <\/ escaping above prevents that — fail loud if it ever regresses.
+    n_close = html.count("</script>")
+    if n_close != 1:
+        raise SystemExit(f"build_gallery: emitted page has {n_close} </script> tags (expected 1) — "
+                         "data escaping is broken; aborting rather than ship a blank gallery")
     out = os.path.join(ROOT, SELF)
     with open(out, "w") as f:
         f.write(html)

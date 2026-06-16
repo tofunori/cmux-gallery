@@ -36,9 +36,17 @@ document.getElementById("fname").textContent = rel ? rel.split("/").pop() : "(no
 let selPage = 1;
 
 async function main(){
-  const pdf = await pdfjsLib.getDocument({url: "/" + rel,
-    standardFontDataUrl: "/.fig_thumbs/pdfjs/standard_fonts/",
-    cMapUrl: "/.fig_thumbs/pdfjs/cmaps/", cMapPacked: true}).promise;
+  let pdf;
+  try {
+    pdf = await pdfjsLib.getDocument({url: "/" + rel,
+      standardFontDataUrl: "/.fig_thumbs/pdfjs/standard_fonts/",
+      cMapUrl: "/.fig_thumbs/pdfjs/cmaps/", cMapPacked: true}).promise;
+  } catch(e) {
+    const p = document.getElementById("pages");
+    p.textContent = "Unable to load PDF: " + (rel || "") + " — " + ((e && e.message) || e);  // textContent = XSS-safe
+    p.style.cssText = "color:#ff6b6b;padding:40px;text-align:center;font-family:-apple-system,sans-serif";
+    return;
+  }
   const wrap = document.getElementById("pages");
   const scale = Math.min(1.6, (window.innerWidth - 60) / 612);
   for(let n = 1; n <= pdf.numPages; n++){

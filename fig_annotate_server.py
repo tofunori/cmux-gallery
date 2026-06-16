@@ -248,7 +248,7 @@ class Handler(SimpleHTTPRequestHandler):
                          "ratings": {k: v for k, v in req.get("ratings", {}).items()
                                      if isinstance(v, int) and 1 <= v <= 5}}
                 sp = os.path.join(PROJECT, ".fig_state.json")
-                tmp = sp + ".tmp"
+                tmp = sp + ".tmp." + str(os.getpid()) + "." + str(threading.get_ident())
                 with open(tmp, "w", encoding="utf-8") as f:
                     json.dump(state, f, ensure_ascii=False, indent=1)
                 os.replace(tmp, sp)
@@ -321,6 +321,9 @@ class Handler(SimpleHTTPRequestHandler):
                     err = "\n".join(lines[:8]) or log[-1500:]
                 return self._respond(200, {"ok": ok, "pdf": pdf if ok else None,
                                            "root": root, "error": err})
+            except FileNotFoundError:
+                return self._respond(200, {"ok": False,
+                                           "error": "latexmk not found at /Library/TeX/texbin/latexmk — install MacTeX or TeX Live"})
             except subprocess.TimeoutExpired:
                 return self._respond(200, {"ok": False, "error": "compilation > 120 s"})
             except Exception as e:
@@ -411,12 +414,12 @@ class Handler(SimpleHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", 0))
             req = json.loads(self.rfile.read(length))
             name = re.sub(r"[^A-Za-z0-9_.-]", "_", os.path.splitext(req["name"])[0])
-            data = req["dataURL"].split(",", 1)[1]
+            raw = base64.b64decode(req["dataURL"].split(",", 1)[1])  # decode FIRST: a bad dataURL must not leave a 0-byte orphan
             os.makedirs(OUT_DIR, exist_ok=True)
             stamp = time.strftime("%Y%m%d-%H%M%S")
             path = os.path.join(OUT_DIR, f"{name}_annot_{stamp}.png")
             with open(path, "wb") as f:
-                f.write(base64.b64decode(data))
+                f.write(raw)
 
             notes = req.get("notes") or []
             msg = path
@@ -434,7 +437,7 @@ class Handler(SimpleHTTPRequestHandler):
                     ref = find_claude_surface()
                     if ref:
                         subprocess.run(["cmux", "send", "--surface", ref, msg + " "],
-                                       capture_output=True, timeout=5)
+                                       capture_output=True, timeout=5, start_new_session=True)
                 except Exception:
                     pass
             threading.Thread(target=push, daemon=True).start()
