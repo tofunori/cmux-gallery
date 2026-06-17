@@ -386,7 +386,6 @@ HTML = """<!DOCTYPE html>
     <button id="tagSel" style="display:none" title="Tag the selected files">&#127991; Tag (0)</button>
     <button id="exportSel" style="display:none" title="Export selected: folder / zip / contact sheet">&#10515; Export (0) &#9662;</button>
     <div id="exportMenu" class="menu"></div>
-    <span class="count" id="count"></span>
   </div>
 </header>
 <main id="grid"></main>
@@ -882,7 +881,6 @@ function render(){
     if(sort==='btime_asc') return a.btime-b.btime;
     return b.mtime-a.mtime;
   });
-  document.getElementById('count').textContent = list.length+' / '+FILES.length+' figures';
   lbList = list.filter(f=>imgExt(f.ext)||videoExt(f.ext)||f.ext==='pdf'||f.ext==='md'||codeExt(f.ext));
   const grid=document.getElementById('grid');
   if(!list.length){grid.innerHTML='<div class="empty">No matching files.</div>';renderedRels=[];return;}
