@@ -2,18 +2,32 @@
 
 A portable artifact gallery + annotation tool for [cmux](https://github.com/manaflow-ai/cmux).
 Point it at any project and it builds a searchable HTML gallery of your figures,
-PDFs, data and code — with thumbnails, an image lightbox, PDF / Markdown / code
-viewers, and figure annotation. Clicking a card opens the source file in a cmux
-pane. No manual setup per project.
+PDFs, videos, data and code — with thumbnails, an image lightbox, a video player,
+PDF / Markdown / code viewers, figure annotation, and an SVG element selector.
+Organise with tags, favourites and smart-hide rules; export a selection or jump
+from a figure to the script that generated it. No manual setup per project.
 
 It generalises a figures-index builder + a small local server so they work in
 **any** project root.
 
 ## Features
 
-Search · sort · folder + format filters · archive toggle · favourites + star
-ratings · Quick-Look thumbnails (macOS) · image lightbox · embedded PDF /
-Markdown / code viewers · figure annotation (pen / arrow / rect + notes).
+**Browse** — search · sort · folder filter · one **Formats** menu (toggle any
+type, or "only" it) · favourites + 1–5★ ratings · Quick-Look thumbnails (macOS).
+
+**View** — image lightbox (+ compare two side-by-side) · in-page **video player**
+(mp4 / mov / webm, with seeking) · embedded PDF / Markdown / code / LaTeX viewers.
+
+**Annotate** — pen / arrow / rect + numbered notes on a figure → sent to Claude
+Code; or an **SVG element selector** (click a curve / label / axis of a vector
+plot to send that exact element).
+
+**Organise** — tags / collections · per-file hide + glob **smart-hide rules**
+(e.g. `**/_qa/**`, `*_preview.png`) · archive toggle, all under a **⚙ View** menu.
+
+**Act on a selection** — bulk hide / delete (to Trash) · **export** to a folder, a
+zip, or a printable contact sheet · **tag** · open a figure's **generating
+script** (`</> src` → stem-match, else ripgrep).
 
 ## How it works
 
@@ -93,11 +107,18 @@ serve` from a LaunchAgent.
 | `--port <n>` | server port (default: a stable per-project port 8790–9789; 0 = random) |
 | `GALLERY_TITLE` | header wordmark (default `Gallery`) |
 | `GALLERY_NO_THUMBS=1` | skip Quick-Look thumbnail generation |
+| `GALLERY_SHOW_FRAMES=1` | index animation-frame dirs (hidden by default) |
 
 ## Notes & caveats
 
-- **Untrusted filenames are safe**: filenames are HTML-escaped and all card
-  handlers use `data-*` delegation, so a crafted filename can't execute script.
+- **Untrusted filenames are safe**: filenames and tags are HTML-escaped and all
+  card handlers use `data-*` delegation, so a crafted name can't execute script.
+- **Local-only API**: the server binds `127.0.0.1`, and its state-changing /
+  shell endpoints reject browser cross-origin requests (the `Origin` must be
+  loopback), so a web page you happen to have open can't drive it.
+- **Animation frames are skipped** by default (dirs like `*_frames/`, `frames/`,
+  `*html_frames*`) — the playable video/GIF is the artifact, not the stills. Set
+  `GALLERY_SHOW_FRAMES=1` to index them.
 - **annotate → Claude** and the LaTeX/`open`/trash actions are macOS- and
   Claude-Code-in-cmux-specific; they degrade gracefully elsewhere.
 - **Light by default**: image cards load on-demand downscaled thumbnails
@@ -107,8 +128,9 @@ serve` from a LaunchAgent.
   `/snippet` as cards scroll in (keeps the embedded data ~½ the size), and the
   newest thumbnails are pre-warmed at build so the first paint after a rescan is
   instant.
-- `figures_index.html`, `.fig_thumbs/`, `annotations/` are regenerated per build
-  (gitignored).
+- `figures_index.html`, `.fig_thumbs/`, `annotations/` and `_gallery_exports/`
+  are regenerated artifacts; `.fig_state.json` holds per-machine favourites /
+  ratings / tags / hidden / rules. Gitignore all of them.
 
 ## Bundled third-party
 
