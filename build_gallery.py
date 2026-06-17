@@ -236,13 +236,10 @@ HTML = """<!DOCTYPE html>
         width:48px;height:48px;border-radius:50%;background:rgba(0,0,0,.5);color:#fff;
         display:flex;align-items:center;justify-content:center;font-size:17px;padding-left:3px;
         pointer-events:none;border:2px solid rgba(255,255,255,.9)}
-  #fmtMenu{position:absolute;z-index:50;display:none;flex-direction:column;gap:2px;margin-top:6px;
-      background:#27272a;border:1px solid #3f3f46;border-radius:10px;padding:8px;min-width:140px;
-      box-shadow:0 8px 28px rgba(0,0,0,.5)}
-  #fmtMenu label{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;
-      font-size:12.5px;cursor:pointer;user-select:none}
-  #fmtMenu label:hover{background:rgba(255,255,255,.05)}
-  #fmtMenu input{accent-color:var(--accent)}
+  .menu .only{cursor:pointer;color:#71717a;font-size:10.5px;flex-shrink:0;padding:0 3px}
+  .menu .only:hover{color:var(--accent)}
+  .menu .mlink{cursor:pointer;color:#a1a1aa;font-size:11.5px}
+  .menu .mlink:hover{color:var(--accent)}
   .count{color:var(--muted);font-size:12px;margin-left:auto}
   main{padding:18px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
   .card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;
@@ -368,12 +365,8 @@ HTML = """<!DOCTYPE html>
       <option value="rating">Sort: rating (1–5)</option>
     </select>
     <select id="folder"><option value="">All folders</option></select>
-    <span class="chip" data-ext="png">PNG</span>
-    <span class="chip" data-ext="pdf">PDF</span>
-    <span class="chip" data-ext="svg" title="Vector plots — open one to select its elements">&#9672; SVG</span>
-    <span class="chip" data-ext="mp4" title="Show only videos (mp4 / mov / webm) — click again to restore">.mp4</span>
     <span class="chip" id="fmtChip">Formats &#9662;</span>
-    <div id="fmtMenu"></div>
+    <div id="fmtMenu" class="menu"></div>
     <span class="chip off" id="favChip">&#9733; Favorites</span>
     <span class="chip" id="tagChip" title="Filter by tag / collection">&#127991; Tags &#9662;</span>
     <div id="tagMenu" class="menu"></div>
@@ -822,27 +815,30 @@ const imgExt = e => e==='png'||e==='jpg'||e==='jpeg'||e==='svg';
 const videoExt = e => e==='mp4'||e==='m4v'||e==='mov'||e==='webm';
 const appExt = e => e==='docx'||e==='xlsx'||e==='xls'||e==='csv';
 const codeExt = e => e==='py'||e==='r'||e==='jl'||e==='tex'||e==='sh';
-const FMT_LIST = [['html','HTML'],['docx','DOCX'],['xlsx','XLSX'],['csv','CSV'],['md','Markdown'],['py','Python'],['r','R'],['jl','Julia'],['tex','LaTeX'],['sh','Shell']];
+// All file types live in this one menu (PNG/PDF/SVG/Video are no longer standalone chips).
+const TYPE_LIST = [['png','PNG'],['jpg','JPG'],['svg','SVG'],['mp4','Video (mp4/mov/webm)'],['pdf','PDF'],['html','HTML'],['docx','DOCX'],['xlsx','XLSX'],['csv','CSV'],['md','Markdown'],['py','Python'],['r','R'],['jl','Julia'],['tex','LaTeX'],['sh','Shell']];
 const fmtMenu=document.getElementById('fmtMenu'), fmtChip=document.getElementById('fmtChip');
+const typeGroup = e => e==='jpg'?['jpg','jpeg']:e==='mp4'?['mp4','m4v','mov','webm']:e==='xlsx'?['xlsx','xls']:[e];
 function fmtChipLabel(){
-  const n=FMT_LIST.filter(([e])=>exts[e]).length;
+  const n=TYPE_LIST.filter(([e])=>exts[e]).length;
   fmtChip.innerHTML='Formats'+(n?' ('+n+')':'')+' &#9662;';
   fmtChip.classList.toggle('off',!n);
 }
-fmtMenu.innerHTML=FMT_LIST.map(([e,lab])=>
-  `<label><input type="checkbox" data-fmt="${e}" ${exts[e]?'checked':''}> ${lab}</label>`).join('');
-fmtMenu.querySelectorAll('input').forEach(cb=>{
-  cb.onchange=()=>{const e=cb.dataset.fmt;exts[e]=cb.checked;if(e==='xlsx')exts['xls']=cb.checked;saveExts();fmtChipLabel();render();};
-});
-fmtChip.onclick=e=>{
-  e.stopPropagation();
-  document.querySelectorAll('.menu').forEach(x=>x.style.display='none'); closeFloat();
-  const r=fmtChip.getBoundingClientRect();
-  fmtMenu.style.left=r.left+'px'; fmtMenu.style.top=(r.bottom+window.scrollY)+'px';
-  fmtMenu.style.display=fmtMenu.style.display==='flex'?'none':'flex';
-};
-fmtMenu.onclick=e=>e.stopPropagation();
-document.addEventListener('click',()=>{fmtMenu.style.display='none';});
+function buildFmtMenu(){
+  fmtMenu.innerHTML='<div class="mhd">Show file types</div>'+
+    TYPE_LIST.map(([e,lab])=>`<div class="mi"><label class="lbl"><input type="checkbox" data-fmt="${e}" ${exts[e]?'checked':''}> ${lab}</label><span class="only" data-only="${e}" title="Show only this type">only</span></div>`).join('')+
+    '<div class="madd" style="justify-content:space-between;gap:10px"><span class="mlink" data-fmt-all="img">Images only</span><span class="mlink" data-fmt-all="reset">Reset</span></div>';
+  fmtMenu.onclick=e=>e.stopPropagation();
+  fmtMenu.querySelectorAll('input[data-fmt]').forEach(cb=>{
+    cb.onchange=()=>{ typeGroup(cb.dataset.fmt).forEach(k=>exts[k]=cb.checked); saveExts(); fmtChipLabel(); render(); };
+  });
+  fmtMenu.querySelectorAll('[data-only]').forEach(el=>{
+    el.onclick=()=>{ Object.keys(exts).forEach(k=>exts[k]=false); typeGroup(el.dataset.only).forEach(k=>exts[k]=true); saveExts(); buildFmtMenu(); fmtChipLabel(); render(); };
+  });
+  const ia=fmtMenu.querySelector('[data-fmt-all="img"]'); if(ia) ia.onclick=()=>{ Object.keys(exts).forEach(k=>exts[k]=false); ['png','jpg','jpeg','svg'].forEach(k=>exts[k]=true); saveExts(); buildFmtMenu(); fmtChipLabel(); render(); };
+  const rs=fmtMenu.querySelector('[data-fmt-all="reset"]'); if(rs) rs.onclick=()=>{ Object.assign(exts, DEFAULT_EXTS); saveExts(); buildFmtMenu(); fmtChipLabel(); render(); };
+}
+fmtChip.onclick=e=>{ e.stopPropagation(); buildFmtMenu(); menuToggle(fmtMenu, fmtChip); };
 fmtChipLabel();
 
 const fsel = document.getElementById('folder');
@@ -928,30 +924,7 @@ function render(){
   }).join('') + (list.length>MAX?`<div class="empty">… and ${list.length-MAX} more. Refine your search to see them.</div>`:'');
   grid.querySelectorAll('.snip[data-snip]').forEach(el=>snipObserver.observe(el));
 }
-const VIDEXTS=['mp4','m4v','mov','webm'];
-let preSoloExts=null;
-// "video solo" = only video types are on (detected from state, so it survives reloads)
-const isVideoSolo=()=>VIDEXTS.some(v=>exts[v]) && Object.keys(exts).every(k=>VIDEXTS.includes(k)||!exts[k]);
-function syncFilterUI(){
-  document.querySelectorAll('.chip[data-ext]').forEach(c=>{const e=c.dataset.ext;c.classList.toggle('off',!exts[e]);c.classList.toggle('on',!!exts[e]);});
-  fmtMenu.querySelectorAll('input').forEach(cb=>{cb.checked=!!exts[cb.dataset.fmt];});
-  fmtChipLabel();
-}
-document.querySelectorAll('.chip[data-ext]').forEach(c=>{
-  const e=c.dataset.ext;
-  c.onclick=()=>{
-    if(e==='mp4'){                                   // solo toggle: only videos, click again restores
-      if(isVideoSolo()){ Object.assign(exts, preSoloExts||DEFAULT_EXTS); preSoloExts=null; }
-      else { preSoloExts=Object.assign({},exts); Object.keys(exts).forEach(k=>exts[k]=false); VIDEXTS.forEach(v=>exts[v]=true); }
-    } else {                                         // additive on/off, like PNG / PDF
-      exts[e]=!exts[e];
-      if(e==='jpg')exts['jpeg']=exts['jpg'];
-      if(e==='xlsx')exts['xls']=exts['xlsx'];
-    }
-    syncFilterUI(); saveExts(); render();
-  };
-});
-syncFilterUI();
+// (format quick-chips + their video-solo handler removed — all types now live in the Formats menu)
 updateViewChip();
 const favChip=document.getElementById('favChip');
 favChip.textContent='\u2605 Favorites ('+favs.size+')';
