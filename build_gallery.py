@@ -196,7 +196,7 @@ HTML = """<!DOCTYPE html>
   header{position:sticky;top:0;z-index:10;background:rgba(24,24,27,.97);backdrop-filter:blur(8px);
          border-bottom:1px solid var(--border);padding:14px 20px}
   .brand{display:flex;align-items:baseline;gap:10px;margin-bottom:12px;flex-wrap:wrap}
-  .brand .logo{color:var(--accent);align-self:center;display:block}
+  .brand .logo{color:var(--txt);align-self:center;display:block}
   .brand .wm{font-size:15px;font-weight:600;letter-spacing:.01em}
   .brand .proj{font-size:12px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
   .brand .stat{margin-left:auto;font-size:12px;color:var(--muted)}
@@ -351,7 +351,7 @@ HTML = """<!DOCTYPE html>
 <body>
 <header>
   <div class="brand">
-    <svg class="logo" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Gallery"><rect x="3" y="3" width="18" height="18" rx="4.5"/><circle cx="8.6" cy="8.6" r="1.7" fill="currentColor" stroke="none"/><path d="M20.5 15.5 15.5 10.5 5.5 20.5"/></svg>
+    <svg class="logo" width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-label="Gallery"><rect x="2" y="2" width="9.5" height="13.5" rx="1.6"/><rect x="2" y="17" width="9.5" height="5" rx="1.6"/><rect x="13.5" y="2" width="8.5" height="5" rx="1.6"/><rect x="13.5" y="9" width="8.5" height="13" rx="1.6"/></svg>
     <span class="wm">__WORDMARK__</span>
     <span class="proj">__PROJECT__</span>
     <span class="stat">__COUNT__ files · __GEN__</span>
