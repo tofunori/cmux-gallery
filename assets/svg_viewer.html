@@ -36,6 +36,10 @@
   #side footer{padding:10px 12px;border-top:1px solid #3f3f46;display:flex;gap:8px}
   #side footer button{flex:1;padding:7px;background:#3f3f46;color:#e4e4e7;border:none;border-radius:7px;cursor:pointer;font-size:12.5px}
   #side footer button:hover{background:#52525b}
+  #dragtoggle{background:#3f3f46;color:#e4e4e7;border:none;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:11.5px}
+  #dragtoggle.on{background:#ffce3a;color:#000;font-weight:600}
+  body.dragmode #plot svg *{cursor:move}
+  body.dragmode #hint{display:none}
   #err{color:#ff6b6b;padding:40px;text-align:center}
 </style>
 </head>
@@ -43,6 +47,7 @@
 <header>
   <b id="fname"></b>
   <span id="hint">hover = highlight · click = select an element · add notes →</span>
+  <button id="dragtoggle" title="Drag any text/label to reposition it, then Save SVG">✥ Move labels</button>
   <span id="cur"></span>
 </header>
 <div id="body">
@@ -55,6 +60,7 @@
     <div id="sellist"><div id="empty">Click any curve, label, axis or legend in the plot to select it.<br><br>Works on <b>SVG</b> plots (matplotlib <code>fig.savefig('x.svg')</code>) — a PNG is flat pixels with no elements to select.</div></div>
     <footer>
       <button id="clear">Clear</button>
+      <button id="savesvg" title="Write the moved labels back into the .svg file on disk (keeps a .orig.bak)">💾 Save SVG</button>
       <button id="send" title="Write the selection to ~/.claude/fig-selection.json — then tell Claude &quot;ma sélection&quot;">▻ Send to Claude</button>
     </footer>
   </div>
@@ -126,6 +132,61 @@ document.getElementById("send").onclick = () => {
     .catch(() => {});
 };
 
+// ---- label drag mode: move any text/label, then Save SVG back to disk ----
+let dragMode = false, drag = null, dirty = false;
+const dragBtn = document.getElementById("dragtoggle");
+dragBtn.onclick = () => {
+  dragMode = !dragMode;
+  dragBtn.classList.toggle("on", dragMode);
+  document.body.classList.toggle("dragmode", dragMode);
+  dragBtn.textContent = dragMode ? "✥ Moving — click to stop" : "✥ Move labels";
+  showHover(null);
+};
+function svgPoint(evt, ref){                             // client px -> (ref or root) user units
+  const p = svg.createSVGPoint(); p.x = evt.clientX; p.y = evt.clientY;
+  return p.matrixTransform((ref || svg).getScreenCTM().inverse());
+}
+function onDown(e){
+  if(!dragMode || !svg) return;
+  const g = meaningful(e.target); if(!g) return;
+  if(!g.querySelector("text, use")) return;             // only labels/legends/titles — not the bg patch/axes
+  e.preventDefault();
+  const ref = g.parentNode;                             // translate is applied in the parent's space
+  const p = svgPoint(e, ref);
+  if(!g.hasAttribute("data-orig")) g.setAttribute("data-orig", g.getAttribute("transform") || "");
+  drag = { el: g, ref: ref, sx: p.x, sy: p.y,
+           dx0: parseFloat(g.getAttribute("data-dx") || 0),
+           dy0: parseFloat(g.getAttribute("data-dy") || 0) };
+}
+function onMove(e){
+  if(drag){
+    const p = svgPoint(e, drag.ref);
+    const dx = drag.dx0 + (p.x - drag.sx), dy = drag.dy0 + (p.y - drag.sy);
+    drag.el.setAttribute("data-dx", dx); drag.el.setAttribute("data-dy", dy);
+    drag.el.setAttribute("transform", "translate(" + dx + "," + dy + ") " + drag.el.getAttribute("data-orig"));
+    dirty = true; renderSel();
+  } else if(!dragMode){
+    showHover(meaningful(e.target));
+  }
+}
+function onUp(){ drag = null; }
+function saveSVG(){
+  if(!svg) return;
+  const b = document.getElementById("savesvg");
+  const clone = svg.cloneNode(true);                     // strip bookkeeping attrs from the saved file
+  clone.querySelectorAll("[data-orig]").forEach(el => {
+    el.removeAttribute("data-orig"); el.removeAttribute("data-dx"); el.removeAttribute("data-dy");
+  });
+  const out = '<?xml version="1.0" encoding="utf-8" standalone="no"?>\n' + new XMLSerializer().serializeToString(clone);
+  fetch("/save-svg", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rel: file, name: file.split("/").pop(), svg: out }) })
+    .then(r => r.json()).then(j => {
+      b.textContent = (j && j.ok) ? "Saved ✓" : "Error"; if(j && j.ok) dirty = false;
+      setTimeout(() => b.textContent = "💾 Save SVG", 1600);
+    }).catch(() => { b.textContent = "Error"; setTimeout(() => b.textContent = "💾 Save SVG", 1600); });
+}
+document.getElementById("savesvg").onclick = saveSVG;
+
 async function load(){
   try{
     const ver = new URLSearchParams(location.search).get("v") || "";
@@ -139,9 +200,11 @@ async function load(){
     svg = document.importNode(root, true);
     plot.textContent = "";
     plot.appendChild(svg);
-    svg.addEventListener("mousemove", e => showHover(meaningful(e.target)));
-    svg.addEventListener("mouseleave", () => showHover(null));
-    svg.addEventListener("click", e => { const g = meaningful(e.target); if(g) toggle(g); });
+    svg.addEventListener("mousedown", onDown);
+    svg.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    svg.addEventListener("mouseleave", () => { if(!drag) showHover(null); });
+    svg.addEventListener("click", e => { if(dragMode || drag) return; const g = meaningful(e.target); if(g) toggle(g); });
     try{ new ResizeObserver(() => renderSel()).observe(svg); }catch(e){}
   }catch(e){ plot.innerHTML = '<div id="err">Unable to load ' + esc(file) + ' (' + esc(e.message) + ')</div>'; }
 }

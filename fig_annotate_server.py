@@ -476,6 +476,33 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
+        if self.path == "/save-svg":
+            # Overwrite an in-project .svg with an edited version (labels moved in the
+            # SVG viewer's drag mode). Keeps a one-time pristine .orig.bak alongside it.
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                if length <= 0 or length > 64 * 1024 * 1024:        # 64 MB cap
+                    return self._respond(413, {"error": "empty or oversized svg"})
+                req = json.loads(self.rfile.read(length))
+                rel = req.get("rel") or req.get("name") or ""
+                svg = req.get("svg", "")
+                if "<svg" not in svg[:4000]:
+                    return self._respond(400, {"error": "not an svg payload"})
+                dst = self._safe_path(rel)                          # pin to PROJECT, symlink-safe
+                if not dst or not dst.lower().endswith(".svg") or not os.path.isfile(dst):
+                    return self._respond(400, {"error": "bad or non-svg path"})
+                bak = dst + ".orig.bak"
+                if not os.path.exists(bak):                          # keep the pristine original once
+                    shutil.copy2(dst, bak)
+                tmp = dst + ".tmp." + str(os.getpid()) + "." + str(threading.get_ident())
+                with open(tmp, "w", encoding="utf-8") as f:
+                    f.write(svg)
+                os.replace(tmp, dst)                                 # atomic
+                return self._respond(200, {"ok": True, "path": os.path.relpath(dst, PROJECT)})
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"error": "bad request: " + str(e)})
+            except Exception as e:
+                return self._respond(500, {"error": str(e)})
         if self.path == "/state":
             try:
                 length = int(self.headers.get("Content-Length", 0))
