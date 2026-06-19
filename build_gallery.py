@@ -188,28 +188,28 @@ HTML = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__TITLE__</title>
 <style>
-  :root{ --bg:#18181b; --card:#27272a; --card2:#1f1f23; --txt:#e4e4e7; --muted:#a1a1aa;
+  :root{ --bg:#202024; --card:#27272a; --card2:#1f1f23; --txt:#e4e4e7; --muted:#a1a1aa;
          --accent:#5b9dff; --arch:#3a2f1a; --border:#3f3f46; }
   *{box-sizing:border-box}
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
        background:var(--bg);color:var(--txt);font-size:14px}
   header{position:sticky;top:0;z-index:10;background:var(--bg);background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(8px);
-         border-bottom:1px solid var(--border);padding:14px 20px}
-  .brand{display:flex;align-items:baseline;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+         border-bottom:1px solid var(--border);padding:9px 16px}
+  .brand{display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap}
   .brand .logo{color:var(--txt);align-self:center;display:block}
   .brand .wm{font-size:15px;font-weight:600;letter-spacing:.01em}
   .brand .proj{font-size:12px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
   .brand .stat{margin-left:auto;font-size:12px;color:var(--muted)}
-  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-  input[type=search]{flex:1;min-width:240px;padding:9px 12px;border-radius:6px;border:1px solid var(--border);
-        background:var(--card);color:var(--txt);font-size:14px}
+  .controls{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  input[type=search]{flex:1;min-width:220px;padding:6px 10px;border-radius:6px;border:1px solid var(--border);
+        background:var(--card);color:var(--txt);font-size:13px}
   input[type=search].collapsed{display:none}
   #searchChip.on{border-color:var(--accent);color:var(--accent)}
-  select,button{padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card);
-        color:var(--txt);font-size:13px;cursor:pointer}
+  select,button{padding:5px 9px;border-radius:6px;border:1px solid var(--border);background:var(--card);
+        color:var(--txt);font-size:12px;cursor:pointer}
   #folder{max-width:200px}   /* keep it compact; long folder paths would otherwise stretch it to its own line */
-  .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:6px;
-        border:1px solid var(--border);background:var(--card);cursor:pointer;user-select:none;font-size:12px}
+  .chip{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:6px;
+        border:1px solid var(--border);background:var(--card);cursor:pointer;user-select:none;font-size:11.5px}
   .chip.off{opacity:.4}
   .menu{position:fixed;z-index:60;display:none;flex-direction:column;gap:2px;
         background:var(--card);border:1px solid var(--border);border-radius:10px;padding:7px;min-width:min(200px,calc(100vw - 16px));max-width:min(360px,calc(100vw - 16px));
@@ -249,7 +249,7 @@ HTML = """<!DOCTYPE html>
   main{padding:18px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
   .card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;
         display:flex;flex-direction:column;transition:.12s}
-  .card:hover{border-color:var(--accent);transform:translateY(-2px)}
+  .card:hover{box-shadow:0 4px 16px rgba(0,0,0,.28);transform:translateY(-1px)}
   .thumb{height:150px;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden}
   .thumb img{max-width:100%;max-height:100%;object-fit:contain}
   .ph{height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -450,8 +450,8 @@ SEED_FAVS.forEach(f=>favs.add(f));
 const saveFavs = ()=>localStorage.setItem('figFavs', JSON.stringify([...favs]));
 saveFavs();
 const THEMES = {
-  'Default':   {bg:'#18181b',card:'#27272a',card2:'#1f1f23',txt:'#e4e4e7',muted:'#a1a1aa',accent:'#5b9dff',border:'#3f3f46',arch:'#3a2f1a'},
-  'Codex One': {bg:'#282c34',card:'#2f343f',card2:'#21252b',txt:'#abb2bf',muted:'#7f848e',accent:'#4d78cc',border:'#3e4451',arch:'#3a2f1a'},
+  'Default':   {bg:'#202024',card:'#27272a',card2:'#1f1f23',txt:'#e4e4e7',muted:'#a1a1aa',accent:'#5b9dff',border:'#3f3f46',arch:'#3a2f1a'},
+  'Codex One': {bg:'#202024',card:'#2f343f',card2:'#21252b',txt:'#abb2bf',muted:'#7f848e',accent:'#4d78cc',border:'#3e4451',arch:'#3a2f1a'},
   'Dracula':   {bg:'#282a36',card:'#343746',card2:'#21222c',txt:'#f8f8f2',muted:'#9aa0b3',accent:'#bd93f9',border:'#44475a',arch:'#3a2f1a'},
   'Nord':      {bg:'#2e3440',card:'#3b4252',card2:'#272c36',txt:'#e5e9f0',muted:'#9aa3b2',accent:'#88c0d0',border:'#434c5e',arch:'#3a2f1a'}
 };

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>SVG editor</title>
 <style>
-  :root{--bg:#18181b;--card:#27272a;--txt:#e4e4e7;--muted:#a1a1aa;--accent:#5b9dff;--border:#3f3f46}
+  :root{--bg:#202024;--card:#27272a;--txt:#e4e4e7;--muted:#a1a1aa;--accent:#5b9dff;--border:#3f3f46}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
             font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;flex-direction:column;overflow:hidden}
   header{background:var(--card);border-bottom:1px solid var(--border);padding:8px 60px 8px 14px;
@@ -32,7 +32,7 @@
   .lassosvg polyline{fill:rgba(91,157,255,.14);stroke:#5b9dff;stroke-width:1.5;stroke-dasharray:5 3;stroke-linejoin:round}
   #err{color:#ff6b6b;padding:40px;text-align:center}
 </style>
-<script>(function(){var T={'Default':{bg:'#18181b',card:'#27272a',txt:'#e4e4e7',muted:'#a1a1aa',accent:'#5b9dff',border:'#3f3f46'},'Codex One':{bg:'#282c34',card:'#2f343f',txt:'#abb2bf',muted:'#7f848e',accent:'#4d78cc',border:'#3e4451'},'Dracula':{bg:'#282a36',card:'#343746',txt:'#f8f8f2',muted:'#9aa0b3',accent:'#bd93f9',border:'#44475a'},'Nord':{bg:'#2e3440',card:'#3b4252',txt:'#e5e9f0',muted:'#9aa3b2',accent:'#88c0d0',border:'#434c5e'}};var t;try{t=T[localStorage.getItem('figTheme')];}catch(e){}t=t||T['Default'];var r=document.documentElement.style;for(var k in t)r.setProperty('--'+k,t[k]);})();</script>
+<script>(function(){var T={'Default':{bg:'#202024',card:'#27272a',txt:'#e4e4e7',muted:'#a1a1aa',accent:'#5b9dff',border:'#3f3f46'},'Codex One':{bg:'#202024',card:'#2f343f',txt:'#abb2bf',muted:'#7f848e',accent:'#4d78cc',border:'#3e4451'},'Dracula':{bg:'#282a36',card:'#343746',txt:'#f8f8f2',muted:'#9aa0b3',accent:'#bd93f9',border:'#44475a'},'Nord':{bg:'#2e3440',card:'#3b4252',txt:'#e5e9f0',muted:'#9aa3b2',accent:'#88c0d0',border:'#434c5e'}};var t;try{t=T[localStorage.getItem('figTheme')];}catch(e){}t=t||T['Default'];var r=document.documentElement.style;for(var k in t)r.setProperty('--'+k,t[k]);})();</script>
 </head>
 <body>
 <header>
@@ -100,7 +100,13 @@ function grabTarget(target, whole){
   }
   return meaningful(target);
 }
-function draggable(g){ return !!(g && g.id); }
+let figArea = 0;
+function draggable(g){
+  if(!(g && g.id)) return false;
+  // reject the figure background / big outer frame so it can't be grabbed instead of the real elements
+  try{ const b = g.getBBox(); if(figArea && b.width * b.height > 0.85 * figArea) return false; }catch(e){}
+  return true;
+}
 let moveSet = [];
 let lasso = null, lassoEl = null;
 function stagePt(e){ const s = stage.getBoundingClientRect(); return { x: e.clientX - s.left, y: e.clientY - s.top }; }
@@ -187,11 +193,17 @@ function onDown(e){
     const s = stagePt(e); lassoStart([s.x, s.y]); capture(e);
     return;
   }
+  // clicking on/inside a selected element drags the WHOLE selection — members are blocks
+  // (axes_/legend_) that grabTarget can't re-resolve, so match by containment, not equality
+  if(moveSet.length && moveSet.some(m => m === e.target || (m.contains && m.contains(e.target)))){
+    e.preventDefault();
+    startDrag(moveSet.slice(), e); capture(e);
+    return;
+  }
   const g = grabTarget(e.target, e.shiftKey);             // Shift = grab the whole legend/colorbar block
-  const onMember = g && moveSet.indexOf(g) >= 0;
-  if(!g || !draggable(g)){ if(!onMember && moveSet.length) clearMoveSet(); return; }
+  if(!g || !draggable(g)){ if(moveSet.length) clearMoveSet(); return; }   // empty / non-draggable click → deselect
   e.preventDefault();
-  startDrag(onMember ? moveSet.slice() : [g], e);         // grabbed a selected member → move the whole set
+  startDrag([g], e);
   drag.g = g; capture(e);
 }
 function onMove(e){
@@ -277,6 +289,7 @@ async function load(){
     svg = document.importNode(root, true);
     plot.textContent = "";
     plot.appendChild(svg);
+    try{ const f = (svg.querySelector('[id^="figure"]') || svg).getBBox(); figArea = f.width * f.height; }catch(e){}
     svg.addEventListener("pointerdown", onDown);
     svg.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
