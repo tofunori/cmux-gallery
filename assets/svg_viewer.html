@@ -444,11 +444,16 @@ function onUp(){
 function fsActiveEl(){ return document.fullscreenElement || document.webkitFullscreenElement || null; }
 function nativeFsAllowed(){
   let p=null; try{p=new URLSearchParams(location.search);}catch(e){}
-  if(p&&p.get("cssFs")==="1") return false;   // explicit opt-out: pane-only
   if(p&&p.get("nativeFs")==="1") return true;
-  // Default: real whole-screen fullscreen, including Orca's embedded webview.
-  // fsReflow() nudges layout after exit so the split pane doesn't stay stuck.
-  return true;
+  if(p&&p.get("cssFs")==="1") return false;
+  // Orca's embedded WebKit accepts requestFullscreen() but ignores
+  // exitFullscreen() (the pane stays stuck full-screen). Default to CSS-only
+  // inside embedded shells — fills the pane, always exits cleanly.
+  const brands=(navigator.userAgentData&&navigator.userAgentData.brands||[]).map(b=>b.brand).join(" ");
+  const sig=[navigator.userAgent||"",navigator.vendor||"",brands].join(" ");
+  if(/\b(Orca|Electron|cmux)\b/i.test(sig)) return false;
+  if(window.self!==window.top) return false;
+  return false;
 }
 function setFsUi(on){
   document.body.classList.toggle("fs-mode", on);

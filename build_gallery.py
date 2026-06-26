@@ -813,12 +813,18 @@ function fsActiveEl(){
 }
 function lbNativeFsAllowed(){
   let p=null; try{p=new URLSearchParams(location.search);}catch(_){}
-  if(p&&p.get('cssFs')==='1') return false;   // explicit opt-out: pane-only
-  if(p&&p.get('nativeFs')==='1') return true;
-  // Default: real whole-screen fullscreen everywhere, including Orca's embedded
-  // WKWebView. Exiting native FS used to leave the split pane stuck; lbFsReflow()
-  // now nudges layout across several frames after exit to prevent that.
-  return true;
+  if(p&&p.get('nativeFs')==='1') return true;   // real browsers: true whole-screen
+  if(p&&p.get('cssFs')==='1') return false;
+  // Orca's embedded WebKit ACCEPTS requestFullscreen() (the pane fills the whole
+  // screen) but IGNORES exitFullscreen() — the pane stays stuck full-screen on
+  // exit. No JS trick fixes it (tried both exit APIs + multi-frame reflow). So
+  // default to CSS-only here: the lightbox fills the pane and ALWAYS exits
+  // cleanly. Do NOT re-enable native FS for embedded shells.
+  const brands=(navigator.userAgentData&&navigator.userAgentData.brands||[]).map(b=>b.brand).join(' ');
+  const sig=[navigator.userAgent||'',navigator.vendor||'',brands].join(' ');
+  if(/\b(Orca|Electron|cmux)\b/i.test(sig)) return false;
+  if(window.self!==window.top) return false;
+  return false;
 }
 function lbFsUiPulse(){
   const el=lb(); if(!el.classList.contains('fs')) return;
