@@ -818,17 +818,35 @@ function fsActiveEl(){
 function lbNativeFsAllowed(){
   let p=null; try{p=new URLSearchParams(location.search);}catch(_){}
   if(p&&p.get('nativeFs')==='1') return true;   // real browsers: true whole-screen
+  if(p&&p.get('orcaFs')==='1') return true;     // Orca webview: native enter, server-assisted exit
   if(p&&p.get('cssFs')==='1') return false;
   // Orca's embedded WebKit ACCEPTS requestFullscreen() (the pane fills the whole
   // screen) but IGNORES exitFullscreen() — the pane stays stuck full-screen on
-  // exit. No JS trick fixes it (tried both exit APIs + multi-frame reflow). So
-  // default to CSS-only here: the lightbox fills the pane and ALWAYS exits
-  // cleanly. Do NOT re-enable native FS for embedded shells.
+  // exit. No JS trick fixes it (tried both exit APIs + multi-frame reflow).
+  // Orca is allowed into native FS only when the launcher passes ?orcaFs=1,
+  // which also enables a local-server exit route.
   const brands=(navigator.userAgentData&&navigator.userAgentData.brands||[]).map(b=>b.brand).join(' ');
   const sig=[navigator.userAgent||'',navigator.vendor||'',brands].join(' ');
   if(/\b(Orca|Electron|cmux)\b/i.test(sig)) return false;
   if(window.self!==window.top) return false;
   return false;
+}
+function lbOrcaFsExitAllowed(){
+  let p=null; try{p=new URLSearchParams(location.search);}catch(_){}
+  return !!(p&&p.get('orcaFs')==='1');
+}
+async function lbOrcaFsExit(){
+  if(!lbOrcaFsExitAllowed()) return null;
+  try{
+    const r=await fetch('/orca-fullscreen-exit',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({source:'gallery-lightbox',rel:(lbList[lbIdx]||{}).rel||''})});
+    let data={}; try{data=await r.json();}catch(_){}
+    if(!r.ok||!data.ok) throw new Error(data.error||('HTTP '+r.status));
+    return data;
+  }catch(e){
+    console.warn('Orca fullscreen exit failed',e);
+    return {ok:false,error:String(e&&e.message||e)};
+  }
 }
 function lbFsUiPulse(){
   const el=lb(); if(!el.classList.contains('fs')) return;
@@ -875,6 +893,7 @@ async function lbFsLeave(){
       // exitFullscreen entirely) — call both, don't wait for one to throw.
       try{await document.exitFullscreen?.();}catch(_){}
       try{await document.webkitExitFullscreen?.();}catch(_){}
+      if(lbOrcaFsExitAllowed()) await lbOrcaFsExit();
     }
   } finally { fsLeaving=false; lbFsReflow(); }
 }

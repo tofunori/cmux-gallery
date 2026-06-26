@@ -25,6 +25,125 @@ OUT_DIR = os.path.join(PROJECT, "annotations")
 PORT = int(os.environ.get("FIG_PORT", 8790))
 
 
+def _orca_cli():
+    return shutil.which("orca") or ("/usr/local/bin/orca" if os.path.exists("/usr/local/bin/orca") else None)
+
+
+def _compact_window(win):
+    if not isinstance(win, dict):
+        return None
+    keys = ("id", "title", "x", "y", "width", "height", "screenIndex",
+            "isMinimized", "isOffscreen")
+    return {k: win.get(k) for k in keys if k in win}
+
+
+def _run_orca_json(args, timeout=8):
+    cli = _orca_cli()
+    if not cli:
+        return False, {"error": "orca CLI not found"}
+    try:
+        r = subprocess.run([cli] + args + ["--json"], capture_output=True,
+                           text=True, timeout=timeout)
+    except Exception as e:
+        return False, {"error": str(e)}
+    try:
+        data = json.loads(r.stdout or "{}")
+    except ValueError:
+        data = {"stdout": (r.stdout or "")[-800:]}
+    if r.stderr:
+        data["stderr"] = r.stderr[-800:]
+    ok = r.returncode == 0 and data.get("ok", True) is not False
+    if not ok and "error" not in data:
+        data["error"] = "orca command failed"
+    return ok, data
+
+
+def _activate_orca():
+    for script in (
+        'tell application id "com.stablyai.orca" to activate',
+        'tell application "Orca" to activate',
+    ):
+        try:
+            r = subprocess.run(["osascript", "-e", script], capture_output=True,
+                               text=True, timeout=3)
+            if r.returncode == 0:
+                time.sleep(0.25)
+                return True, None
+        except Exception as e:
+            err = str(e)
+        else:
+            err = (r.stderr or r.stdout or "activation failed").strip()
+    return False, err
+
+
+def _orca_window_state(restore=True):
+    args = ["computer", "get-app-state", "--app", "Orca", "--no-screenshot"]
+    if restore:
+        args.append("--restore-window")
+    ok, data = _run_orca_json(args, timeout=10)
+    snap = ((data.get("result") or {}).get("snapshot") or {}) if isinstance(data, dict) else {}
+    win = _compact_window(snap.get("window"))
+    if ok and win:
+        return True, {"window": win}
+
+    ok2, data2 = _run_orca_json(["computer", "list-windows", "--app", "Orca"],
+                                timeout=8)
+    wins = ((data2.get("result") or {}).get("windows") or []) if isinstance(data2, dict) else []
+    win2 = _compact_window(wins[0]) if wins else None
+    if ok2 and win2:
+        return True, {"window": win2, "fallback": "list-windows"}
+    return False, {"error": (data.get("error") if isinstance(data, dict) else None)
+                   or (data2.get("error") if isinstance(data2, dict) else None)
+                   or "no Orca window found"}
+
+
+def _osascript_fullscreen_hotkey():
+    script = '''
+tell application id "com.stablyai.orca" to activate
+delay 0.2
+tell application "System Events"
+  key code 3 using {control down, command down}
+end tell
+'''
+    try:
+        r = subprocess.run(["osascript"], input=script, capture_output=True,
+                           text=True, timeout=5)
+        return r.returncode == 0, {"stderr": (r.stderr or "")[-800:]}
+    except Exception as e:
+        return False, {"error": str(e)}
+
+
+def orca_fullscreen_exit():
+    """Leave Orca's HTML fullscreen when Electron ignores document.exitFullscreen()."""
+    activated, activate_err = _activate_orca()
+    before_ok, before = _orca_window_state(restore=True)
+    if not before_ok:
+        return {"ok": False, "error": before.get("error") or activate_err or "Orca window not available",
+                "activated": activated}
+
+    win_id = (before.get("window") or {}).get("id")
+    hotkey_args = ["computer", "hotkey", "--app", "Orca", "--restore-window",
+                   "--no-screenshot", "--key", "Control+Command+F"]
+    if win_id:
+        hotkey_args[4:4] = ["--window-id", str(win_id)]
+    ok, data = _run_orca_json(hotkey_args, timeout=10)
+    method = "orca computer hotkey"
+    if not ok:
+        activated_retry, _ = _activate_orca()
+        time.sleep(0.25)
+        ok, data = _run_orca_json(hotkey_args, timeout=10)
+        activated = activated or activated_retry
+    if not ok:
+        ok, data = _osascript_fullscreen_hotkey()
+        method = "osascript System Events hotkey"
+
+    time.sleep(0.45)
+    after_ok, after = _orca_window_state(restore=True)
+    return {"ok": bool(ok and after_ok), "method": method, "activated": activated,
+            "before": before.get("window"), "after": after.get("window"),
+            "error": None if ok else data.get("error", "fullscreen hotkey failed")}
+
+
 def find_tex_root(p):
     """Root document of a .tex file: itself if it has \\documentclass,
     else the % !TEX root directive, else a sibling/parent .tex that includes it."""
@@ -523,6 +642,12 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         if not self._local_only():
             return self._respond(403, {"error": "cross-origin blocked"})
+        if self.path == "/orca-fullscreen-exit":
+            try:
+                result = orca_fullscreen_exit()
+                return self._respond(200 if result.get("ok") else 500, result)
+            except Exception as e:
+                return self._respond(500, {"ok": False, "error": str(e)})
         if self.path == "/clear-quote":
             try:
                 open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w").close()

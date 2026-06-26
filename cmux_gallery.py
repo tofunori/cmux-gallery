@@ -80,16 +80,17 @@ def root_arg(value: str) -> str:
 
 
 def gallery_url(port: int) -> str:
-    """Return the browser URL, forcing CSS fullscreen inside Orca panes.
+    """Return the browser URL, selecting the safest fullscreen mode for the host.
 
     Orca's embedded WebKit accepts requestFullscreen() but ignores
     exitFullscreen(), so native fullscreen leaves the pane stuck full-screen on
-    exit. Inside Orca we therefore ask the page for the CSS-only path (fills the
-    pane, always exits cleanly). System browsers keep real native fullscreen, so
-    opening this URL in Safari/Chrome gives true whole-screen with a clean exit.
+    exit. Inside Orca we use native entry plus a local-server exit route that
+    asks the Orca desktop bridge to leave fullscreen. System browsers keep plain
+    native fullscreen, so opening this URL in Safari/Chrome gives true
+    whole-screen with a clean exit.
     """
     if os.environ.get("ORCA_APP_VERSION") or os.environ.get("TERM_PROGRAM") == "Orca":
-        qs = "?cssFs=1"
+        qs = "?orcaFs=1"
     else:
         qs = "?nativeFs=1"
     return f"http://127.0.0.1:{port}/{OUT}{qs}"
