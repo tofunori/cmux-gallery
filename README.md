@@ -68,6 +68,11 @@ cmux-gallery run --root /path    # a specific project (default: current dir)
 cmux-gallery build               # just write the HTML + viewers (no server)
 ```
 
+When launched from inside a git checkout, the default root is the checkout root,
+not the exact subdirectory. So you can run `cmux-gallery run` from
+`my-project/figures/plots/` and it will index `my-project/`. Outside git, it
+uses the current directory. Use `--root <dir>` to override this.
+
 Each project gets a **stable port** derived from its path (8790–9789), so the URL
 is the same every time — open it in any browser (cmux or system) and bookmark it,
 e.g. `http://127.0.0.1:8790/figures_index.html`. Pin one with `--port <n>`.
@@ -139,7 +144,7 @@ rebuild clean).
 
 | flag / env | meaning |
 |---|---|
-| `--root <dir>` | project to scan (default: current dir) |
+| `--root <dir>` | project to scan (default: git root for the current dir, else current dir) |
 | `--port <n>` | server port (default: a stable per-project port 8790–9789; 0 = random) |
 | `GALLERY_TITLE` | header wordmark (default `Gallery`) |
 | `GALLERY_NO_THUMBS=1` | skip Quick-Look thumbnail generation |

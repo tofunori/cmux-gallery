@@ -44,6 +44,61 @@ def project_port(root: str) -> int:
     return PORT_BASE + (h % 1000)  # 8790–9789
 
 
+def git_project_root(start: str) -> str | None:
+    """Return the enclosing git worktree root for ``start``, if there is one."""
+    try:
+        res = subprocess.run(
+            ["git", "-C", start, "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    root = res.stdout.strip()
+    if res.returncode == 0 and root:
+        return os.path.abspath(root)
+    return None
+
+
+def default_project_root(start: str | None = None) -> str:
+    """Pick the project root for commands launched from inside a project."""
+    cwd = os.path.abspath(os.path.expanduser(start or os.getcwd()))
+    return git_project_root(cwd) or cwd
+
+
+def root_arg(value: str) -> str:
+    """Normalize an explicit ``--root`` argument."""
+    return os.path.abspath(os.path.expanduser(value))
+
+
+def gallery_url(port: int) -> str:
+    """Return the browser URL, forcing CSS fullscreen inside Orca panes.
+
+    Orca's embedded browser can accept requestFullscreen() but leave the split
+    pane broken on exit. System browsers keep native fullscreen unless the URL
+    explicitly asks for the CSS-only path.
+    """
+    if os.environ.get("ORCA_APP_VERSION") or os.environ.get("TERM_PROGRAM") == "Orca":
+        qs = "?cssFs=1"
+    else:
+        qs = "?nativeFs=1"
+    return f"http://127.0.0.1:{port}/{OUT}{qs}"
+
+
+def open_cmux_browser(url: str) -> bool:
+    """Open ``url`` in cmux when the CLI is available."""
+    if not shutil.which("cmux"):
+        print("[cmux-gallery] cmux CLI not found on PATH; open this URL manually "
+              "or run with --no-open", file=sys.stderr)
+        return False
+    res = subprocess.run(["cmux", "browser", "open", url], capture_output=True, text=True)
+    msg = res.stdout.strip() or res.stderr.strip()
+    if msg:
+        print(msg)
+    return res.returncode == 0
+
+
 def free_port() -> int:
     s = socket.socket()
     s.bind(("127.0.0.1", 0))
@@ -135,12 +190,11 @@ def cmd_run(a) -> None:
     # a random port — that's what was leaking a new port on every run.
     if not a.port and _port_busy(port):
         if server_project(port) == os.path.realpath(a.root):
-            url = f"http://127.0.0.1:{port}/{OUT}"
+            url = gallery_url(port)
             print(f"[cmux-gallery] gallery already running on :{port} → reusing it "
                   f"(rebuilt; stable URL, no duplicate server)")
             if a.open:
-                res = subprocess.run(["cmux", "browser", "open", url], capture_output=True, text=True)
-                print(res.stdout.strip() or res.stderr.strip())
+                open_cmux_browser(url)
             print(f"[cmux-gallery] gallery → {url}")
             return
         print(f"[cmux-gallery] port {port} busy (not our gallery) → using a free port", file=sys.stderr)
@@ -152,10 +206,9 @@ def cmd_run(a) -> None:
     try:
         if not wait_up(port):
             print("[cmux-gallery] warning: server /ping did not answer", file=sys.stderr)
-        url = f"http://127.0.0.1:{port}/{OUT}"
+        url = gallery_url(port)
         if a.open:
-            res = subprocess.run(["cmux", "browser", "open", url], capture_output=True, text=True)
-            print(res.stdout.strip() or res.stderr.strip())
+            open_cmux_browser(url)
         print(f"[cmux-gallery] gallery → {url}   (Ctrl-C to stop)")
         srv.wait()
     except KeyboardInterrupt:
@@ -178,7 +231,7 @@ def cmd_serve(a) -> None:
     print(f"[cmux-gallery] built {out}")
     port = a.port or project_port(a.root)
     env = dict(os.environ, FIG_PORT=str(port), GALLERY_ROOT=a.root)
-    print(f"[cmux-gallery] serving http://127.0.0.1:{port}/{OUT}  "
+    print(f"[cmux-gallery] serving {gallery_url(port)}  "
           f"(cwd={a.root}; hosting; self-healing; Ctrl-C to stop)")
     srv = None
     def _stop(*_):
@@ -208,19 +261,24 @@ def main(argv=None) -> int:
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build", help="build the gallery HTML + provision viewers")
-    b.add_argument("--root", default=os.getcwd(), type=os.path.abspath)
+    b.add_argument("--root", default=None, type=root_arg,
+                   help="project to scan (default: git root for cwd, else cwd)")
     r = sub.add_parser("run", help="build + start server + open in cmux (foreground)")
-    r.add_argument("--root", default=os.getcwd(), type=os.path.abspath)
+    r.add_argument("--root", default=None, type=root_arg,
+                   help="project to scan (default: git root for cwd, else cwd)")
     r.add_argument("--port", type=int, default=0,
                    help="server port (default: a stable port derived from the project path)")
     r.add_argument("--no-open", dest="open", action="store_false",
                    help="start (or reuse) the server without opening a cmux browser tab — "
                         "for a Dock control that just keeps the server alive at launch")
     s = sub.add_parser("serve", help="build + HOST the server, self-healing, no browser (for a Dock control)")
-    s.add_argument("--root", default=os.getcwd(), type=os.path.abspath)
+    s.add_argument("--root", default=None, type=root_arg,
+                   help="project to scan (default: git root for cwd, else cwd)")
     s.add_argument("--port", type=int, default=0,
                    help="server port (default: a stable port derived from the project path)")
     a = p.parse_args(argv)
+    if a.root is None:
+        a.root = default_project_root()
     {"build": cmd_build, "run": cmd_run, "serve": cmd_serve}[a.cmd](a)
     return 0
 
