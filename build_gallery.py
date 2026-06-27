@@ -8,15 +8,17 @@ Scans the project for image files (png, pdf, svg, jpg, html), collects metadata,
 and writes a self-contained figures_index.html at the project root.
 Run it again any time to refresh the index after producing new figures.
 """
-import os, json, time, hashlib, subprocess, sys, concurrent.futures
+import os, json, time, hashlib, subprocess, sys, signal, tempfile, shutil, concurrent.futures
 
 ROOT = os.path.abspath(os.environ.get("GALLERY_ROOT") or os.getcwd())
 EXTS = {".png", ".jpg", ".jpeg", ".svg", ".pdf", ".html", ".docx", ".xlsx", ".xls", ".csv", ".md", ".py", ".r", ".jl", ".tex", ".sh",
         ".mp4", ".m4v", ".mov", ".webm"}
-# Skip these directories entirely (virtualenvs, git, caches, worktrees, the index itself)
+# Skip these directories entirely (virtualenvs, git, caches, build trees, worktrees, the index itself).
+# .prism is a build tree that mirrors source files (PDF/Office duplicates) — indexing it walks
+# thousands of extra artefacts and thumbnails build-output copies, so exclude it outright.
 EXCLUDE_PARTS = {".git", ".venv", ".venv-era5", ".venv-codex", "node_modules",
                  "__pycache__", ".ipynb_checkpoints", "worktrees", ".claude", ".fig_thumbs",
-                 "_gallery_exports"}
+                 "_gallery_exports", ".prism"}
 ARCHIVE_HINTS = ("_archive", "menage_", "/tmp/", "tmp_dir", "/tmp", "raqdps_tests")
 SELF = "figures_index.html"
 SNIP_EXTS = (".py", ".r", ".jl", ".sh", ".tex", ".md", ".csv")
@@ -65,42 +67,101 @@ def cmux_favorites():
 
 THUMB_DIR = os.path.join(ROOT, ".fig_thumbs")
 NO_THUMBS = bool(os.environ.get("GALLERY_NO_THUMBS"))  # skip qlmanage thumbnails (PDF/Office) for speed
+# qlmanage is fast/reliable for PDF + video, slow + flaky for Office docs
+# (.xlsx/.xls/.docx hang or take 20-40s each and leak renderer processes).
+# Office files are still indexed as cards — just not thumbnailed. Set
+# GALLERY_OFFICE_THUMBS=1 to opt back into qlmanage thumbnails for them.
+THUMB_EXTS = (".pdf", ".mp4", ".m4v", ".mov", ".webm")
+if os.environ.get("GALLERY_OFFICE_THUMBS"):
+    THUMB_EXTS = THUMB_EXTS + (".docx", ".xlsx", ".xls")
 
 def thumb_key(rel, mtime):
     return hashlib.md5(f"{rel}:{mtime}".encode()).hexdigest()
 
 
-def build_thumbs(pending):
-    """Generate missing thumbnails in batches (one qlmanage call per batch).
+def _kill_proc_tree(proc):
+    """Kill a subprocess together with any descendants it spawned.
 
-    pending: list of (full, key). qlmanage writes <basename>.png, so duplicate
-    basenames are spread across different batches."""
+    qlmanage forks QuickLook renderer/worker processes that outlive the parent
+    being killed — that is what leaves orphaned qlmanage instances after every
+    rescan. With start_new_session=True the child runs in its own process group
+    so we can tear the whole tree down with one killpg without touching the
+    builder process."""
+    if proc is None:
+        return
+    try:
+        pgid = os.getpgid(proc.pid)
+    except (ProcessLookupError, PermissionError, OSError):
+        pgid = None
+    if pgid is not None:
+        try:
+            os.killpg(pgid, signal.SIGKILL)
+            return
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+    try:
+        proc.kill()
+    except Exception:
+        pass
+
+
+def build_thumbs(pending):
+    """Generate missing thumbnails in parallel, one qlmanage call per file.
+
+    Each file gets its own temp output dir so concurrent calls with duplicate
+    basenames can't clobber each other's <basename>.png. qlmanage is flaky on
+    macOS (Office files / corrupt PDFs hang it), so each call runs in its own
+    process group with a short timeout — killpg tears down qlmanage AND its
+    renderer children instead of orphaning them."""
+    if not pending:
+        return
     os.makedirs(THUMB_DIR, exist_ok=True)
-    batches = []
-    for full, key in pending:
+    # sweep stale per-file temp dirs from any prior crashed/killed run
+    for name in os.listdir(THUMB_DIR):
+        if name.startswith("qlm_"):
+            shutil.rmtree(os.path.join(THUMB_DIR, name), ignore_errors=True)
+    workers = min(8, os.cpu_count() or 4)
+
+    def gen(job):
+        full, key = job
         base = os.path.basename(full)
-        for b in batches:
-            if base not in b:
-                b[base] = (full, key)
-                break
-        else:
-            batches.append({base: (full, key)})
-    for b in batches:
-        files = [full for full, _ in b.values()]
-        for i in range(0, len(files), 100):
-            chunk = files[i:i+100]
+        out = os.path.join(THUMB_DIR, key + ".png")
+        fail = os.path.join(THUMB_DIR, key + ".fail")
+        tmp = tempfile.mkdtemp(prefix="qlm_", dir=THUMB_DIR)  # per-file: no basename collisions
+        try:
+            proc = None
             try:
-                subprocess.run(["qlmanage", "-t", "-s", "480", "-o", THUMB_DIR] + chunk,
-                               capture_output=True, timeout=30 + 5 * len(chunk))
+                proc = subprocess.Popen(
+                    ["qlmanage", "-t", "-s", "480", "-o", tmp, full],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+                proc.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                _kill_proc_tree(proc)
+                if proc is not None:
+                    try:
+                        proc.wait(timeout=5)
+                    except Exception:
+                        pass
             except Exception:
-                pass
-        for base, (full, key) in b.items():
-            produced = os.path.join(THUMB_DIR, base + ".png")
-            out = os.path.join(THUMB_DIR, key + ".png")
+                _kill_proc_tree(proc)
+            produced = os.path.join(tmp, base + ".png")
             if os.path.exists(produced):
-                os.replace(produced, out)
+                try:
+                    os.replace(produced, out)
+                    if os.path.exists(fail):
+                        os.remove(fail)
+                except OSError:
+                    pass
             else:
-                open(os.path.join(THUMB_DIR, key + ".fail"), "w").close()
+                open(fail, "w").close()
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
+        list(ex.map(gen, pending))
+    print(f"[gallery] built {len(pending)} qlmanage thumbnail(s)")
 
 
 def scan():
@@ -114,6 +175,8 @@ def scan():
         if not SHOW_FRAMES:                       # don't descend into animation-frame dirs
             dirnames[:] = [d for d in dirnames if not is_frames_dir(d)]
         for fn in filenames:
+            if fn.startswith("~$"):  # MS Office lock/temp files — junk, and they hang qlmanage
+                continue
             ext = os.path.splitext(fn)[1].lower()
             if ext not in EXTS or fn == SELF:
                 continue
@@ -125,7 +188,7 @@ def scan():
                 continue
             low = rel.lower()
             thumb = None
-            if ext in (".pdf", ".docx", ".xlsx", ".xls", ".mp4", ".m4v", ".mov", ".webm") and not NO_THUMBS:
+            if ext in THUMB_EXTS and not NO_THUMBS:
                 key = thumb_key(rel, int(st.st_mtime))
                 keys_seen.add(key)
                 if os.path.exists(os.path.join(THUMB_DIR, key + ".png")):
@@ -822,7 +885,7 @@ function lbOrcaFsExitAllowed(){
 function lbNativeFsAllowed(){
   let p=null; try{p=new URLSearchParams(location.search);}catch(_){}
   if(p&&p.get('nativeFs')==='1') return true;   // real browsers: true whole-screen
-  if(lbOrcaFsExitAllowed()) return true;        // Orca webview: native enter, server-assisted exit
+  if(lbOrcaFsExitAllowed()) return false;       // Orca uses the server-launched native viewer
   // Orca's embedded WebKit ACCEPTS requestFullscreen() (the pane fills the whole
   // screen) but IGNORES exitFullscreen() — the pane stays stuck full-screen on
   // exit. No JS trick fixes it (tried both exit APIs + multi-frame reflow).
@@ -835,16 +898,18 @@ function lbNativeFsAllowed(){
   if(window.self!==window.top) return false;
   return false;
 }
-async function lbOrcaFsExit(){
+async function lbOrcaNativeFullscreen(){
   if(!lbOrcaFsExitAllowed()) return null;
+  const rel=(lbList[lbIdx]||{}).rel||'';
+  if(!rel) return {ok:false,error:'no image selected'};
   try{
-    const r=await fetch('/orca-fullscreen-exit',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({source:'gallery-lightbox',rel:(lbList[lbIdx]||{}).rel||''})});
+    const r=await fetch('/orca-native-fullscreen',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({source:'gallery-lightbox',rel})});
     let data={}; try{data=await r.json();}catch(_){}
     if(!r.ok||!data.ok) throw new Error(data.error||('HTTP '+r.status));
     return data;
   }catch(e){
-    console.warn('Orca fullscreen exit failed',e);
+    console.warn('Orca native fullscreen failed',e);
     return {ok:false,error:String(e&&e.message||e)};
   }
 }
@@ -893,13 +958,16 @@ async function lbFsLeave(){
       // exitFullscreen entirely) — call both, don't wait for one to throw.
       try{await document.exitFullscreen?.();}catch(_){}
       try{await document.webkitExitFullscreen?.();}catch(_){}
-      if(lbOrcaFsExitAllowed()) await lbOrcaFsExit();
     }
   } finally { fsLeaving=false; lbFsReflow(); }
 }
 async function lbFsToggle(){
   if(fsActiveEl()||lb().classList.contains('fs')){
     await lbFsLeave(); return;
+  }
+  if(lbOrcaFsExitAllowed()){
+    await lbOrcaNativeFullscreen();
+    return;
   }
   const gen=++lbFsEnterGen;
   lbFsEnter();
