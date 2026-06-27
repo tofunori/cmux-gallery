@@ -12,6 +12,7 @@ import json
 import mimetypes
 import os
 import re
+import signal
 import shutil
 import subprocess
 import tempfile
@@ -23,6 +24,57 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 PROJECT = os.path.realpath(os.environ.get("GALLERY_ROOT") or os.getcwd())
 OUT_DIR = os.path.join(PROJECT, "annotations")
 PORT = int(os.environ.get("FIG_PORT", 8790))
+
+# /thumb spawns a rasteriser per request on the threaded server, so cap concurrency:
+# cheap tools (sips/rsvg) share _THUMB_SEM; heavy headless-Chrome HTML renders get their
+# own tiny pool so a burst of .html cards can't fork dozens of Chrome trees at once.
+_THUMB_SEM = threading.BoundedSemaphore(max(2, min(8, (os.cpu_count() or 4))))
+_CHROME_SEM = threading.BoundedSemaphore(2)
+
+
+def _kill_pg(proc):
+    """SIGKILL a process AND its group. qlmanage/Chrome fork helper processes that
+    outlive a plain proc.kill() — that is what orphans them after a timeout."""
+    if proc is None:
+        return
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            proc.kill()
+        except Exception:
+            pass
+    try:
+        proc.wait(timeout=5)
+    except Exception:
+        pass
+
+
+def _chrome_html_screenshot(chrome, src, out_png):
+    """Headless-Chrome screenshot of an .html file -> "<out_png>.tmp.png" (or None).
+
+    Runs in its own session under a concurrency cap and is killpg'd on timeout, so a
+    page that hangs Chrome (some heavy plotly bundles do) can't orphan Chrome's
+    GPU/renderer children — the previous subprocess.run only killed the parent and left
+    the helpers running. (No --user-data-dir: with one, this Chrome won't exit after the
+    screenshot and every render would burn the full 25s timeout; --headless=new isolates
+    each invocation on the default profile, so concurrent renders don't collide anyway.)"""
+    shot = out_png + ".tmp.png"
+    with _CHROME_SEM:
+        proc = None
+        try:
+            proc = subprocess.Popen(
+                [chrome, "--headless=new", "--hide-scrollbars",
+                 "--screenshot=" + shot, "--window-size=1000,750",
+                 "--virtual-time-budget=4000", "file://" + src],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                start_new_session=True)
+            proc.communicate(timeout=25)
+        except subprocess.TimeoutExpired:
+            _kill_pg(proc)
+        except Exception:
+            _kill_pg(proc)
+    return shot if os.path.exists(shot) else None
 
 
 def _orca_cli():
@@ -162,49 +214,35 @@ end tell
 
 
 def orca_fullscreen_exit():
-    """Leave Orca's HTML fullscreen when Electron ignores document.exitFullscreen()."""
-    activated, activate_err = _activate_orca()
-    before_ok, before = _orca_window_state(restore=True)
-    if not before_ok:
-        return {"ok": False, "error": before.get("error") or activate_err or "Orca window not available",
-                "activated": activated}
+    """Deprecated compatibility endpoint.
 
-    win_id = (before.get("window") or {}).get("id")
-    ax_before = _orca_ax_fullscreen()
-    ok, data = _orca_press_escape(win_id)
-    method = "orca computer press-key Escape"
-    if not ok:
-        activated_retry, _ = _activate_orca()
-        time.sleep(0.25)
-        ok, data = _orca_press_escape(win_id)
-        activated = activated or activated_retry
-    if not ok:
-        ok, data = _osascript_escape_key()
-        method = "osascript System Events Escape"
+    Older generated galleries called this after entering Orca's broken WebKit
+    fullscreen. Driving Orca from that request can freeze the whole app, so the
+    current Orca path avoids WebKit fullscreen entirely and this route is inert.
+    """
+    return {"ok": True, "deprecated": True, "method": "noop; use /orca-native-fullscreen"}
 
-    time.sleep(0.35)
-    ax_after_escape = _orca_ax_fullscreen()
-    mac_toggled = False
-    if ax_after_escape is True:
-        hotkey_args = ["computer", "hotkey", "--app", "Orca", "--restore-window",
-                       "--no-screenshot", "--key", "Control+Command+F"]
-        if win_id:
-            hotkey_args[4:4] = ["--window-id", str(win_id)]
-        mac_ok, mac_data = _run_orca_json(hotkey_args, timeout=10)
-        if not mac_ok:
-            mac_ok, mac_data = _osascript_fullscreen_hotkey()
-        mac_toggled = bool(mac_ok)
-        ok = ok and mac_ok
-        if not mac_ok:
-            data = mac_data
 
-    time.sleep(0.45)
-    after_ok, after = _orca_window_state(restore=True)
-    return {"ok": bool(ok and after_ok), "method": method, "activated": activated,
-            "before": before.get("window"), "after": after.get("window"),
-            "macFullscreenBefore": ax_before, "macFullscreenAfterEscape": ax_after_escape,
-            "macFullscreenToggled": mac_toggled,
-            "error": None if ok else data.get("error", "fullscreen hotkey failed")}
+NATIVE_FULLSCREEN_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".tif", ".tiff", ".bmp", ".svg"}
+
+
+def launch_native_fullscreen(path):
+    viewer = os.path.join(os.path.dirname(os.path.abspath(__file__)), "native_fullscreen_viewer.py")
+    if not os.path.isfile(viewer):
+        return False, {"error": "native fullscreen viewer missing"}
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, viewer, path],
+            cwd=PROJECT,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except Exception as e:
+        return False, {"error": str(e)}
+    threading.Thread(target=proc.wait, daemon=True).start()
+    return True, {"pid": proc.pid}
 
 
 def find_tex_root(p):
@@ -488,14 +526,17 @@ class Handler(SimpleHTTPRequestHandler):
                         rsvg = shutil.which("rsvg-convert")
                         try:
                             if rsvg:
-                                subprocess.run([rsvg, "-w", str(w), "-o", out, src],
-                                               capture_output=True, timeout=20, check=True)
+                                with _THUMB_SEM:
+                                    subprocess.run([rsvg, "-w", str(w), "-o", out, src],
+                                                   capture_output=True, timeout=20, check=True)
                             else:
                                 out = src  # no rsvg -> serve the raw svg (browsers render it correctly)
                         except Exception:
                             out = src
                     elif src.lower().endswith((".html", ".htm")):
-                        # render the page with headless Chrome (a real preview), then downscale
+                        # render the page with headless Chrome (a real preview), then downscale.
+                        # _chrome_html_screenshot caps concurrency + killpg's a hung render so it
+                        # can't orphan Chrome's helper processes or collide on the default profile.
                         chrome = next((c for c in (
                             "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
                             "/Applications/Chromium.app/Contents/MacOS/Chromium") if os.path.isfile(c)),
@@ -503,18 +544,12 @@ class Handler(SimpleHTTPRequestHandler):
                             or shutil.which("chromium") or shutil.which("chrome"))
                         if not chrome:
                             return self._respond(404, {"error": "no html preview (chrome not found)"})
-                        tmp = out + ".tmp.png"
-                        try:
-                            subprocess.run([chrome, "--headless=new", "--hide-scrollbars",
-                                            "--screenshot=" + tmp, "--window-size=1000,750",
-                                            "--virtual-time-budget=4000", "file://" + src],
-                                           capture_output=True, timeout=25)
-                        except Exception:
-                            pass
-                        if os.path.exists(tmp):
+                        tmp = _chrome_html_screenshot(chrome, src, out)
+                        if tmp and os.path.exists(tmp):
                             try:
-                                subprocess.run(["sips", "-Z", str(w), "-s", "format", "png", tmp, "--out", out],
-                                               capture_output=True, timeout=15, check=True)
+                                with _THUMB_SEM:
+                                    subprocess.run(["sips", "-Z", str(w), "-s", "format", "png", tmp, "--out", out],
+                                                   capture_output=True, timeout=15, check=True)
                             except Exception:
                                 os.replace(tmp, out)
                             if os.path.exists(tmp):
@@ -526,8 +561,9 @@ class Handler(SimpleHTTPRequestHandler):
                             return self._respond(404, {"error": "html preview failed"})
                     else:
                         try:
-                            subprocess.run(["sips", "-Z", str(w), "-s", "format", "png", src, "--out", out],
-                                           capture_output=True, timeout=20, check=True)
+                            with _THUMB_SEM:
+                                subprocess.run(["sips", "-Z", str(w), "-s", "format", "png", src, "--out", out],
+                                               capture_output=True, timeout=20, check=True)
                         except Exception:
                             out = src  # sips missing/failed -> serve the original (correct, just not downscaled)
                 return self._serve_file(out)
@@ -711,6 +747,22 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._respond(200 if result.get("ok") else 500, result)
             except Exception as e:
                 return self._respond(500, {"ok": False, "error": str(e)})
+        if self.path == "/orca-native-fullscreen":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                req = json.loads(self.rfile.read(length)) if length > 0 else {}
+                rel = req.get("rel") or ""
+                p = self._safe_path(rel)
+                ext = os.path.splitext(p or "")[1].lower()
+                if not p or not os.path.isfile(p) or ext not in NATIVE_FULLSCREEN_EXTS:
+                    return self._respond(400, {"ok": False, "error": "not a supported project image"})
+                ok, data = launch_native_fullscreen(p)
+                data["ok"] = ok
+                return self._respond(200 if ok else 500, data)
+            except (ValueError, json.JSONDecodeError) as e:
+                return self._respond(400, {"ok": False, "error": "bad request: " + str(e)})
+            except Exception as e:
+                return self._respond(500, {"ok": False, "error": str(e)})
         if self.path == "/clear-quote":
             try:
                 open(os.path.expanduser("~/.claude/fig-last-quote.txt"), "w").close()
@@ -861,13 +913,43 @@ class Handler(SimpleHTTPRequestHandler):
             except Exception as e:
                 return self._respond(500, {"error": str(e)})
         if self.path == "/rescan":
+            builder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "build_gallery.py")
+            proc = None
             try:
-                builder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "build_gallery.py")
-                r = subprocess.run([sys.executable, builder], cwd=PROJECT,
-                                   env=dict(os.environ, GALLERY_ROOT=PROJECT),
-                                   capture_output=True, text=True, timeout=300)
-                return self._respond(200, {"ok": r.returncode == 0,
-                                           "out": (r.stdout or "")[-200:]})
+                # Own session so a 300s timeout can killpg the builder AND its
+                # children cleanly; qlmanage runs in yet another session inside
+                # the builder, so we pkill -f qlmanage too as a safety net.
+                proc = subprocess.Popen(
+                    [sys.executable, builder],
+                    cwd=PROJECT,
+                    env=dict(os.environ, GALLERY_ROOT=PROJECT),
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    text=True, start_new_session=True,
+                )
+                out, _ = proc.communicate(timeout=300)
+                rc = proc.returncode
+                return self._respond(200, {"ok": rc == 0,
+                                           "out": (out or "")[-200:]})
+            except subprocess.TimeoutExpired:
+                if proc is not None:
+                    try:
+                        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                    except (ProcessLookupError, PermissionError, OSError):
+                        try:
+                            proc.kill()
+                        except Exception:
+                            pass
+                    try:
+                        proc.wait(timeout=5)
+                    except Exception:
+                        pass
+                # mop up any qlmanage renderers orphaned by the aborted build
+                try:
+                    subprocess.run(["pkill", "-f", "qlmanage"],
+                                   capture_output=True, timeout=10)
+                except Exception:
+                    pass
+                return self._respond(200, {"ok": False, "out": "rescan timed out"})
             except (KeyError, ValueError, json.JSONDecodeError) as e:
                 return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
@@ -986,7 +1068,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._respond(200, {"ok": False,
                                            "error": "latexmk not found at /Library/TeX/texbin/latexmk — install MacTeX or TeX Live"})
             except subprocess.TimeoutExpired:
-                return self._respond(200, {"ok": False, "error": "compilation > 120 s"})
+                return self._respond(200, {"ok": False, "error": "compilation > 180 s"})
             except (KeyError, ValueError, json.JSONDecodeError) as e:
                 return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
