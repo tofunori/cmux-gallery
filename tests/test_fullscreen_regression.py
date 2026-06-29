@@ -121,6 +121,27 @@ class FullscreenRegressionTests(unittest.TestCase):
         self.assertIn("width:100vw;height:100vh", fs_img)
         self.assertIn("object-fit:contain", fs_img)
 
+    def test_gallery_has_workflow_shortlist_health_recent_compare_tools(self):
+        gallery = (ROOT / "build_gallery.py").read_text()
+        server = (ROOT / "fig_annotate_server.py").read_text()
+
+        self.assertIn("let collections = JSON.parse(localStorage.getItem('figCollections')", gallery)
+        self.assertIn("function buildCollectionChip()", gallery)
+        self.assertIn("function applyCollectionToSel(name)", gallery)
+        self.assertIn("let workflow = JSON.parse(localStorage.getItem('figWorkflow')", gallery)
+        self.assertIn("const WORKFLOW_STATUSES", gallery)
+        self.assertIn("function buildWorkflowChip()", gallery)
+        self.assertIn("let recents = JSON.parse(localStorage.getItem('figRecent')", gallery)
+        self.assertIn("function buildRecentChip()", gallery)
+        self.assertIn("function checkHealth()", gallery)
+        self.assertIn("fetch('/ping')", gallery)
+        self.assertIn("cmpZoom", gallery)
+        self.assertIn("cmpPanX", gallery)
+        self.assertIn("wheel", gallery)
+        self.assertIn("pointermove", gallery)
+        self.assertIn('"collections": collections', server)
+        self.assertIn('"workflow": workflow', server)
+
 
 if __name__ == "__main__":
     unittest.main()

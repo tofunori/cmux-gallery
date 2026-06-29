@@ -329,6 +329,10 @@ HTML = """<!DOCTYPE html>
   .tag{padding:2px 7px;border-radius:5px;background:var(--card2);font-size:10px;text-transform:uppercase}
   .tag.archive{background:var(--arch);color:#d9a441}
   .tag.hid{background:#3a3a44;color:#aab}
+  .tag.workflow{background:#24334a;color:#b9d4ff}
+  .tag.workflow.final{background:#173d2d;color:#8ff0bd}
+  .tag.workflow.rejected{background:#442225;color:#ffaaa9}
+  .tag.workflow.candidate{background:#3b321d;color:#ffd978}
   .card.hid{opacity:.5}
   .card.hid:hover{opacity:1}
   .acts{display:flex;gap:5px;padding:0 12px 11px}
@@ -350,6 +354,8 @@ HTML = """<!DOCTYPE html>
   .rate span{cursor:pointer;color:var(--border);transition:color .1s}
   .rate span.on{color:#ffce3a}
   .rate span:hover{color:#ffe28a}
+  .wfsel{width:100%;margin-top:3px;padding:3px 6px;border-radius:5px;border:1px solid var(--border);
+        background:var(--card2);color:var(--muted);font-size:10.5px}
   .card{position:relative}
   .empty{grid-column:1/-1;text-align:center;color:var(--muted);padding:60px}
   #lb{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.88);display:none;
@@ -401,15 +407,17 @@ HTML = """<!DOCTYPE html>
   #lbClose{position:fixed;top:10px;right:14px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--muted);cursor:pointer;z-index:101}
   #cmp{position:fixed;inset:0;z-index:120;background:#0b0b0d;display:none;flex-direction:column}
   #cmp.show{display:flex}
-  #cmpBar{display:flex;gap:12px;align-items:center;padding:7px 14px;background:var(--bg);border-bottom:1px solid var(--border);font-size:12.5px;color:var(--muted);flex-shrink:0}
+  #cmpBar{display:flex;gap:8px;align-items:center;padding:7px 14px;background:var(--bg);border-bottom:1px solid var(--border);font-size:12.5px;color:var(--muted);flex-shrink:0}
   #cmpBar button{background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--txt);padding:4px 10px;font-size:12px;cursor:pointer}
   #cmpBar button:hover{border-color:#5b6575;color:#fff}
   #cmpClose{margin-left:auto;font-size:20px;cursor:pointer;color:var(--muted);line-height:1}
   #cmpClose:hover{color:#fff}
   #cmpInner{flex:1;display:flex;flex-direction:column;gap:3px;min-height:0;padding:3px}
   #cmpInner.h{flex-direction:row}
-  .cmpCell{flex:1;min-height:0;min-width:0;position:relative;display:flex;align-items:center;justify-content:center;background:#000;border-radius:4px;overflow:hidden}
-  .cmpCell img{max-width:100%;max-height:100%;object-fit:contain}
+  .cmpCell{flex:1;min-height:0;min-width:0;position:relative;background:#000;border-radius:4px;overflow:hidden;touch-action:none}
+  .cmpStage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;cursor:grab}
+  .cmpStage.drag{cursor:grabbing}
+  .cmpCell img{max-width:100%;max-height:100%;object-fit:contain;transform-origin:center center;will-change:transform;user-select:none;pointer-events:none}
   .cmpCell .clbl{position:absolute;top:6px;left:8px;font-size:11px;color:var(--txt);background:rgba(0,0,0,.6);padding:2px 7px;border-radius:5px;max-width:88%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #confirmModal{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center}
   #confirmModal.show{display:flex}
@@ -451,6 +459,14 @@ HTML = """<!DOCTYPE html>
     <span class="chip off" id="favChip">&#9733; Favorites</span>
     <span class="chip" id="tagChip" title="Filter by tag / collection">&#127991; Tags &#9662;</span>
     <div id="tagMenu" class="menu"></div>
+    <span class="chip" id="collChip" title="Collections and shortlists">&#9638; Collections &#9662;</span>
+    <div id="collMenu" class="menu"></div>
+    <span class="chip" id="workflowChip" title="Filter by figure workflow status">&#9673; Workflow &#9662;</span>
+    <div id="workflowMenu" class="menu"></div>
+    <span class="chip" id="recentChip" title="Recently opened files">&#8634; Recent &#9662;</span>
+    <div id="recentMenu" class="menu"></div>
+    <span class="chip" id="healthChip" title="Gallery server health">&#9679; Health</span>
+    <div id="healthMenu" class="menu"></div>
     <span class="chip" id="viewChip" title="View options — archives, hidden, auto-hide rules">&#9881; View &#9662;</span>
     <div id="viewMenu" class="menu"></div>
     <span id="rateFilter" style="display:none"></span>
@@ -461,6 +477,7 @@ HTML = """<!DOCTYPE html>
     <button id="delSel" style="display:none;background:#5c1f1f;border-color:#7a2a2a">&#128465; Delete (0)</button>
     <button id="clrSel" style="display:none" title="Clear the selection">&#10005; Clear</button>
     <button id="tagSel" style="display:none" title="Tag the selected files">&#127991; Tag (0)</button>
+    <button id="collectSel" style="display:none" title="Add selected files to a collection">&#9638; Collect (0)</button>
     <button id="exportSel" style="display:none" title="Export selected: folder / zip / contact sheet">&#10515; Export (0) &#9662;</button>
     <div id="exportMenu" class="menu"></div>
   </div>
@@ -488,6 +505,7 @@ HTML = """<!DOCTYPE html>
 <div id="cmp">
   <div id="cmpBar">
     <button id="cmpOrient">Layout: stacked</button>
+    <button id="cmpReset">Reset zoom</button>
     <span id="cmpInfo">Esc to close</span>
     <span id="cmpClose">&#10005;</span>
   </div>
@@ -518,6 +536,10 @@ document.addEventListener('click',e=>{
   else if(act==='untag') removeTag(rel, el.dataset.tag);
   else if(act==='rate') setRate(rel, +el.dataset.n, e);
   else if(act==='copy'){ navigator.clipboard.writeText(rel); el.textContent='✓'; setTimeout(()=>el.textContent='Path',1200); }
+});
+document.addEventListener('change',e=>{
+  const el=e.target.closest('.wfsel'); if(!el) return;
+  setWorkflow(el.dataset.rel, el.value);
 });
 const SEED_FAVS = __FAVS__;
 let favs = new Set(JSON.parse(localStorage.getItem('figFavs')||'[]'));
@@ -550,13 +572,18 @@ function pushState(){
   clearTimeout(stateTimer);
   stateTimer=setTimeout(()=>{
     fetch('/state',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({favs:[...favs],ratings,hidden:[...hidden],tags,hideRules})}).catch(()=>{});
+      body:JSON.stringify({favs:[...favs],ratings,hidden:[...hidden],tags,hideRules,collections,workflow})}).catch(()=>{});
   },400);
 }
 const saveRatings = ()=>{localStorage.setItem('figRatings', JSON.stringify(ratings));pushState();};
 // --- tags / collections + rule-based (smart) hiding ---------------------------
 let tags = JSON.parse(localStorage.getItem('figTags')||'{}');            // {rel:[tag,...]}
 let activeTag = '';
+let collections = JSON.parse(localStorage.getItem('figCollections')||'{}'); // {name:[rel,...]}
+let activeCollection = '';
+let workflow = JSON.parse(localStorage.getItem('figWorkflow')||'{}');       // {rel:status}
+let workflowFilter = '';
+let recents = JSON.parse(localStorage.getItem('figRecent')||'[]');
 let hideRules = JSON.parse(localStorage.getItem('figHideRules')||'[]');  // glob strings
 const _ruleRe = {};
 function ruleToRe(g){                                  // gitignore-ish glob -> RegExp
@@ -581,14 +608,18 @@ fetch('/state').then(r=>r.json()).then(st=>{
   hidden = new Set(st.hidden||[]);   // server (.fig_state.json) is authoritative — else localStorage resurrects un-hidden files
   if(st.tags) tags = st.tags;
   if(st.hideRules) hideRules = st.hideRules;
+  if(st.collections) collections = st.collections;
+  if(st.workflow) workflow = st.workflow;
   for(const k in _ruleRe) delete _ruleRe[k];
   localStorage.setItem('figFavs', JSON.stringify([...favs]));
   localStorage.setItem('figRatings', JSON.stringify(ratings));
   localStorage.setItem('figHidden', JSON.stringify([...hidden]));
   localStorage.setItem('figTags', JSON.stringify(tags));
   localStorage.setItem('figHideRules', JSON.stringify(hideRules));
+  localStorage.setItem('figCollections', JSON.stringify(collections));
+  localStorage.setItem('figWorkflow', JSON.stringify(workflow));
   document.getElementById('favChip').textContent='\u2605 Favorites ('+favs.size+')';
-  updateHideChip(); buildTagChip(); buildViewMenu();
+  updateHideChip(); buildTagChip(); buildCollectionChip(); buildWorkflowChip(); buildRecentChip(); buildHealthMenu(); buildViewMenu();
   render();
 }).catch(()=>{}).finally(()=>{
   stateLoaded=true;                                 // disk state is merged in now; saves are safe
@@ -623,6 +654,9 @@ function updateDelBtn(){
   const tg = document.getElementById('tagSel');
   tg.style.display = selSet.size ? '' : 'none';
   tg.textContent = '🏷 Tag (' + selSet.size + ')';
+  const co = document.getElementById('collectSel');
+  co.style.display = selSet.size ? '' : 'none';
+  co.textContent = '▦ Collect (' + selSet.size + ')';
   const ex = document.getElementById('exportSel');
   ex.style.display = selSet.size ? '' : 'none';
   ex.textContent = '⤓ Export (' + selSet.size + ') ▾';
@@ -645,31 +679,72 @@ function toggleSel(rel, el, e){
   lastSelRel = rel;
   updateDelBtn();
 }
-// --- compare: stack the selected images (>=2) top/bottom (or side-by-side) ---
-let cmpVert = true;
+// --- compare: selected images with synchronized zoom/pan ---
+let cmpVert = true, cmpZoom = 1, cmpPanX = 0, cmpPanY = 0, cmpDrag = null;
+function cmpApply(){
+  document.querySelectorAll('#cmpInner img').forEach(img=>{
+    img.style.transform = `translate(${cmpPanX}px,${cmpPanY}px) scale(${cmpZoom})`;
+  });
+  document.getElementById('cmpInfo').textContent = Math.round(cmpZoom*100)+'% · wheel zoom · drag pan · Esc close';
+}
+function cmpReset(){
+  cmpZoom = 1; cmpPanX = 0; cmpPanY = 0; cmpApply();
+}
 function openCompare(){
   const imgs = [...selSet].filter(r => imgExt(r.split('.').pop().toLowerCase()));
   if(imgs.length < 2) return;
   const inner = document.getElementById('cmpInner');
+  cmpZoom = 1; cmpPanX = 0; cmpPanY = 0;
   inner.className = cmpVert ? '' : 'h';
   inner.innerHTML = imgs.map(rel => {
     const f = FILES.find(x => x.rel === rel);
     const src = rel + (f ? '?v=' + f.mtime : '');
-    return `<div class="cmpCell"><span class="clbl">${esc(rel.split('/').pop())}</span><img src="${escA(src)}" alt=""></div>`;
+    return `<div class="cmpCell"><span class="clbl">${esc(rel.split('/').pop())}</span><div class="cmpStage"><img src="${escA(src)}" alt=""></div></div>`;
   }).join('');
-  document.getElementById('cmpInfo').textContent = imgs.length + ' images · Esc to close';
   document.getElementById('cmp').classList.add('show');
+  cmpApply();
 }
 function cmpClose(){ document.getElementById('cmp').classList.remove('show'); document.getElementById('cmpInner').innerHTML=''; }
 document.getElementById('cmpSel').onclick = openCompare;
 document.getElementById('cmpClose').onclick = cmpClose;
+document.getElementById('cmpReset').onclick = cmpReset;
 document.getElementById('cmpOrient').onclick = function(){
   cmpVert = !cmpVert;
   document.getElementById('cmpInner').className = cmpVert ? '' : 'h';
   this.textContent = cmpVert ? 'Layout: stacked' : 'Layout: side-by-side';
 };
+const cmpInnerEl = document.getElementById('cmpInner');
+cmpInnerEl.addEventListener('wheel', e=>{
+  if(!document.getElementById('cmp').classList.contains('show')) return;
+  e.preventDefault();
+  const old = cmpZoom;
+  cmpZoom = Math.max(.35, Math.min(8, cmpZoom * Math.pow(1.12, -e.deltaY/80)));
+  const r = cmpInnerEl.getBoundingClientRect();
+  const x = e.clientX - r.left - r.width/2, y = e.clientY - r.top - r.height/2;
+  cmpPanX = x - (x - cmpPanX) * (cmpZoom / old);
+  cmpPanY = y - (y - cmpPanY) * (cmpZoom / old);
+  cmpApply();
+},{passive:false});
+cmpInnerEl.addEventListener('pointerdown', e=>{
+  if(!document.getElementById('cmp').classList.contains('show')) return;
+  cmpDrag = {x:e.clientX,y:e.clientY,px:cmpPanX,py:cmpPanY};
+  cmpInnerEl.querySelectorAll('.cmpStage').forEach(x=>x.classList.add('drag'));
+  cmpInnerEl.setPointerCapture(e.pointerId);
+});
+cmpInnerEl.addEventListener('pointermove', e=>{
+  if(!cmpDrag) return;
+  cmpPanX = cmpDrag.px + e.clientX - cmpDrag.x;
+  cmpPanY = cmpDrag.py + e.clientY - cmpDrag.y;
+  cmpApply();
+});
+cmpInnerEl.addEventListener('pointerup', e=>{
+  cmpDrag = null;
+  cmpInnerEl.querySelectorAll('.cmpStage').forEach(x=>x.classList.remove('drag'));
+  try{cmpInnerEl.releasePointerCapture(e.pointerId);}catch(_){}
+});
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape' && document.getElementById('cmp').classList.contains('show')) cmpClose();
+  if(e.key === '0' && document.getElementById('cmp').classList.contains('show')) cmpReset();
 });
 function confirmDialog(msg, okLabel){
   return new Promise(resolve => {
@@ -719,6 +794,115 @@ function deleteTagEverywhere(t){
   for(const rel in tags){ tags[rel]=tags[rel].filter(x=>x!==t); if(!tags[rel].length) delete tags[rel]; }
   if(activeTag===t) activeTag='';
   saveTags(); buildTagChip(); render();
+}
+const WORKFLOW_STATUSES = [['draft','Draft'],['candidate','Candidate'],['final','Final'],['rejected','Rejected']];
+const allCollections = ()=>Object.keys(collections).sort((a,b)=>a.localeCompare(b));
+function cleanCollection(){
+  const known = new Set(FILES.map(f=>f.rel));
+  for(const name of Object.keys(collections)){
+    collections[name] = [...new Set((collections[name]||[]).filter(r=>known.has(r)))].sort();
+    if(!collections[name].length) delete collections[name];
+  }
+}
+function saveCollections(){ cleanCollection(); localStorage.setItem('figCollections', JSON.stringify(collections)); pushState(); }
+function saveWorkflow(){ localStorage.setItem('figWorkflow', JSON.stringify(workflow)); pushState(); }
+function saveRecent(){ localStorage.setItem('figRecent', JSON.stringify(recents.slice(0,30))); }
+function addRecent(rel){
+  recents = [rel].concat(recents.filter(r=>r!==rel)).filter(r=>FILES.some(f=>f.rel===r)).slice(0,30);
+  saveRecent(); buildRecentChip();
+}
+function applyCollectionToSel(name){
+  name=(name||'').trim(); if(!name || !selSet.size) return;
+  const cur = new Set(collections[name]||[]);
+  selSet.forEach(rel=>cur.add(rel));
+  collections[name]=[...cur].sort();
+  saveCollections(); buildCollectionChip(); render();
+}
+function removeCollection(name){
+  delete collections[name];
+  if(activeCollection===name) activeCollection='';
+  saveCollections(); buildCollectionChip(); render();
+}
+function setActiveCollection(name){
+  activeCollection = activeCollection===name ? '' : name;
+  buildCollectionChip(); render();
+}
+function setWorkflow(rel, status){
+  if(status) workflow[rel]=status; else delete workflow[rel];
+  saveWorkflow(); buildWorkflowChip(); render();
+}
+function setWorkflowFilter(status){
+  workflowFilter = workflowFilter===status ? '' : status;
+  buildWorkflowChip(); render();
+}
+function buildCollectionChip(){
+  cleanCollection();
+  const chip=document.getElementById('collChip'), menu=document.getElementById('collMenu');
+  if(!chip||!menu) return;
+  const names=allCollections();
+  chip.classList.toggle('on', !!activeCollection);
+  chip.innerHTML='▦ '+(activeCollection?('Collection: '+esc(activeCollection)):'Collections')+' ▾';
+  let h = activeCollection ? '<div class="mi clr" data-clear="1">Clear filter</div>' : '';
+  h += names.length ? names.map(name=>{
+    const n=(collections[name]||[]).length;
+    return `<div class="mi${name===activeCollection?' on':''}"><span class="lbl" data-pick="${escA(name)}">${esc(name)} <span class="ct">${n}</span></span><span class="x" data-del="${escA(name)}" title="Delete collection">×</span></div>`;
+  }).join('') : '<div class="mi muted">No collections yet — select files, then Collect.</div>';
+  h += '<div class="madd"><input type="text" id="collQuick" placeholder="new collection"><button id="collQuickAdd">Add selected</button></div>';
+  menu.innerHTML=h;
+  menu.onclick=e=>e.stopPropagation();
+  menu.querySelectorAll('[data-pick]').forEach(el=>el.onclick=()=>{ setActiveCollection(el.dataset.pick); menu.style.display='none'; });
+  menu.querySelectorAll('[data-del]').forEach(el=>el.onclick=()=>removeCollection(el.dataset.del));
+  const c=menu.querySelector('[data-clear]'); if(c) c.onclick=()=>{ activeCollection=''; buildCollectionChip(); render(); menu.style.display='none'; };
+  const inp=menu.querySelector('#collQuick'), btn=menu.querySelector('#collQuickAdd');
+  if(btn) btn.onclick=()=>{ applyCollectionToSel(inp.value); inp.value=''; buildCollectionChip(); };
+  if(inp) inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); applyCollectionToSel(inp.value); inp.value=''; buildCollectionChip(); } };
+}
+function buildWorkflowChip(){
+  const chip=document.getElementById('workflowChip'), menu=document.getElementById('workflowMenu');
+  if(!chip||!menu) return;
+  chip.classList.toggle('on', !!workflowFilter);
+  const label = WORKFLOW_STATUSES.find(x=>x[0]===workflowFilter);
+  chip.innerHTML='◎ '+(label?('Workflow: '+label[1]):'Workflow')+' ▾';
+  const counts = {};
+  Object.values(workflow).forEach(s=>counts[s]=(counts[s]||0)+1);
+  menu.innerHTML=(workflowFilter?'<div class="mi clr" data-clear="1">Clear filter</div>':'')+
+    WORKFLOW_STATUSES.map(([s,l])=>`<div class="mi${workflowFilter===s?' on':''}"><span class="lbl" data-wf="${s}">${l} <span class="ct">${counts[s]||0}</span></span></div>`).join('');
+  menu.onclick=e=>e.stopPropagation();
+  menu.querySelectorAll('[data-wf]').forEach(el=>el.onclick=()=>{ setWorkflowFilter(el.dataset.wf); menu.style.display='none'; });
+  const c=menu.querySelector('[data-clear]'); if(c) c.onclick=()=>{ workflowFilter=''; buildWorkflowChip(); render(); menu.style.display='none'; };
+}
+function buildRecentChip(){
+  const chip=document.getElementById('recentChip'), menu=document.getElementById('recentMenu');
+  if(!chip||!menu) return;
+  recents = recents.filter(r=>FILES.some(f=>f.rel===r)).slice(0,30);
+  saveRecent();
+  chip.innerHTML='↺ Recent'+(recents.length?' ('+recents.length+')':'')+' ▾';
+  menu.innerHTML=recents.length ? recents.slice(0,15).map(rel=>{
+    const f=FILES.find(x=>x.rel===rel);
+    return `<div class="mi"><span class="lbl" data-open="${escA(rel)}">${esc((f&&f.name)||rel)}</span><span class="ct">${esc((f&&f.folder)||'')}</span></div>`;
+  }).join('')+'<div class="mi clr" data-clear-recent="1">Clear recent</div>' : '<div class="mi muted">No recent files yet.</div>';
+  menu.onclick=e=>e.stopPropagation();
+  menu.querySelectorAll('[data-open]').forEach(el=>el.onclick=()=>{ lbOpenAny(el.dataset.open); menu.style.display='none'; });
+  const c=menu.querySelector('[data-clear-recent]'); if(c)c.onclick=()=>{ recents=[]; saveRecent(); buildRecentChip(); menu.style.display='none'; };
+}
+function buildHealthMenu(data){
+  const chip=document.getElementById('healthChip'), menu=document.getElementById('healthMenu');
+  if(!chip||!menu) return;
+  const ok=data&&data.ok;
+  chip.classList.toggle('on', !!ok);
+  chip.classList.toggle('off', data && !ok);
+  chip.innerHTML=(ok?'●':'○')+' Health';
+  const project=data&&data.project?data.project:'checking...';
+  menu.innerHTML='<div class="mhd">Server</div>'+
+    `<div class="mi"><span class="lbl">Status</span><span class="ct">${ok?'OK':(data?'Offline':'Checking')}</span></div>`+
+    `<div class="mi"><span class="lbl">Project</span><span class="ct">${esc(project)}</span></div>`+
+    `<div class="mi"><span class="lbl">Mode</span><span class="ct">${lbOrcaFsExitAllowed()?'Orca native viewer':'Browser fullscreen'}</span></div>`+
+    '<div class="madd"><button id="healthRefresh">Refresh</button></div>';
+  const b=menu.querySelector('#healthRefresh'); if(b)b.onclick=()=>checkHealth();
+}
+function checkHealth(){
+  buildHealthMenu(null);
+  fetch('/ping').then(r=>r.json()).then(j=>buildHealthMenu(j)).catch(()=>buildHealthMenu({ok:false,project:''}));
 }
 function buildTagChip(){
   const chip=document.getElementById('tagChip'), menu=document.getElementById('tagMenu');
@@ -792,6 +976,21 @@ function tagSelMenu(anchor){
   btn.onclick=go; inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); go(); } };
   inp.focus();
 }
+function collectSelMenu(anchor){
+  closeFloat();
+  const m=document.createElement('div'); m.className='menu'; m.id='floatMenu';
+  const names=allCollections();
+  m.innerHTML='<div class="mhd">Collect '+selSet.size+' file(s)</div>'+
+    names.map(n=>`<div class="mi"><span class="lbl" data-collect="${escA(n)}">${esc(n)} <span class="ct">${(collections[n]||[]).length}</span></span></div>`).join('')+
+    '<div class="madd"><input type="text" id="collInput" placeholder="new collection"><button id="collApply">Add</button></div>';
+  m.onclick=e=>e.stopPropagation();
+  placeMenu(m, anchor);
+  m.querySelectorAll('[data-collect]').forEach(el=>el.onclick=()=>{ applyCollectionToSel(el.dataset.collect); closeFloat(); });
+  const inp=m.querySelector('#collInput'), btn=m.querySelector('#collApply');
+  const go=()=>{ applyCollectionToSel(inp.value); closeFloat(); };
+  btn.onclick=go; inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); go(); } };
+  inp.focus();
+}
 function placeMenu(menu, anchor){
   // append to <body> to escape the sticky header's backdrop-filter containing block,
   // then position fixed and clamp inside the viewport so it never clips off-screen.
@@ -824,9 +1023,14 @@ function findScript(rel){
   }).catch(()=>alert('Script search failed (server off?).'));
 }
 document.getElementById('tagChip').onclick=e=>{ e.stopPropagation(); buildTagChip(); menuToggle(document.getElementById('tagMenu'), e.currentTarget); };
+document.getElementById('collChip').onclick=e=>{ e.stopPropagation(); buildCollectionChip(); menuToggle(document.getElementById('collMenu'), e.currentTarget); };
+document.getElementById('workflowChip').onclick=e=>{ e.stopPropagation(); buildWorkflowChip(); menuToggle(document.getElementById('workflowMenu'), e.currentTarget); };
+document.getElementById('recentChip').onclick=e=>{ e.stopPropagation(); buildRecentChip(); menuToggle(document.getElementById('recentMenu'), e.currentTarget); };
+document.getElementById('healthChip').onclick=e=>{ e.stopPropagation(); checkHealth(); menuToggle(document.getElementById('healthMenu'), e.currentTarget); };
 document.getElementById('viewChip').onclick=e=>{ e.stopPropagation(); buildViewMenu(); menuToggle(document.getElementById('viewMenu'), e.currentTarget); };
 document.getElementById('exportSel').onclick=e=>{ e.stopPropagation(); buildExportMenu(); menuToggle(document.getElementById('exportMenu'), e.currentTarget); };
 document.getElementById('tagSel').onclick=e=>{ e.stopPropagation(); tagSelMenu(e.currentTarget); };
+document.getElementById('collectSel').onclick=e=>{ e.stopPropagation(); collectSelMenu(e.currentTarget); };
 document.addEventListener('click',()=>{ document.querySelectorAll('.menu').forEach(x=>x.style.display='none'); closeFloat(); });
 function openDefault(rel){
   fetch('/open', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({rel})});
@@ -847,6 +1051,7 @@ async function lbShow(i){
   if(lbIdx>=0 && i!==lbIdx && !(await annotGuard())) return;
   if(i<0||i>=lbList.length) return;
   lbIdx=i; const f=lbList[i]; lb().classList.remove('annot');
+  addRecent(f.rel);
   const isTex=f.ext==='tex', isPdf=f.ext==='pdf', isMd=f.ext==='md', isCode=codeExt(f.ext), isSvg=f.ext==='svg', isVid=videoExt(f.ext);
   const img=document.getElementById('lbImg'), pdf=document.getElementById('lbPdf'), vid=document.getElementById('lbVid');
   const vw=isPdf||isMd||isCode||isSvg;
@@ -1087,6 +1292,8 @@ function render(){
     if(!showArch && f.archive) return false;
     if(!showHidden && (hidden.has(f.rel) || matchesRule(f.rel))) return false;
     if(activeTag && !(tags[f.rel]||[]).includes(activeTag)) return false;
+    if(activeCollection && !(collections[activeCollection]||[]).includes(f.rel)) return false;
+    if(workflowFilter && workflow[f.rel]!==workflowFilter) return false;
     if(onlyFavs && !favs.has(f.rel)) return false;
     if(onlyFavs && rateMin && (ratings[f.rel]||0)!==rateMin) return false;
     if(fld && f.folder!==fld) return false;
@@ -1128,6 +1335,10 @@ function render(){
     const isFav = favs.has(f.rel);
     const isHid = hidden.has(f.rel);
     const hidTag = isHid?`<span class="tag hid">hidden</span>`:'';
+    const wf = workflow[f.rel]||'';
+    const wfTag = wf?`<span class="tag workflow ${escA(wf)}">${esc(WORKFLOW_STATUSES.find(x=>x[0]===wf)?.[1]||wf)}</span>`:'';
+    const wfSel = `<select class="wfsel" data-rel="${escA(f.rel)}" title="Workflow status"><option value="">Workflow: none</option>`+
+      WORKFLOW_STATUSES.map(([s,l])=>`<option value="${s}" ${wf===s?'selected':''}>${l}</option>`).join('')+'</select>';
     return `<div class="card ${f.archive?'arch':''} ${isHid?'hid':''}">
       <span class="selbox ${selSet.has(f.rel)?'on':''}" data-act="sel" data-rel="${escA(f.rel)}" title="Select — Shift-click to select a range">${selSet.has(f.rel)?'■':'▢'}</span>
       ${(imgExt(f.ext)||videoExt(f.ext)||f.ext==='pdf'||f.ext==='md'||codeExt(f.ext))?`<div data-act="lb" data-rel="${escA(f.rel)}" style="cursor:zoom-in;position:relative">${videoExt(f.ext)?'<span class="playbtn">&#9654;</span>':''}${thumb}</div>`:appExt(f.ext)?`<div data-act="open" data-rel="${escA(f.rel)}" style="cursor:pointer" title="Open with default app">${thumb}</div>`:`<a href="${escA(f.rel)}" target="_blank" style="text-decoration:none">${thumb}</a>`}
@@ -1135,8 +1346,9 @@ function render(){
         <div class="nm">${esc(f.name)}</div>
         ${rateRow(f.rel)}
         <div class="fld">${esc(f.folder)}</div>
+        ${wfSel}
         ${tagsRow(f.rel)}
-        <div class="row"><span class="tag">${esc(f.ext)}</span>${arch}${hidTag}<span title="created ${escA(f.bdate)} \u00b7 modified ${escA(f.mdate)}">${sort.startsWith('btime')?esc(f.bdate):esc(f.mdate)}</span><span>${fmtSize(f.size)}</span></div>
+        <div class="row"><span class="tag">${esc(f.ext)}</span>${arch}${hidTag}${wfTag}<span title="created ${escA(f.bdate)} \u00b7 modified ${escA(f.mdate)}">${sort.startsWith('btime')?esc(f.bdate):esc(f.mdate)}</span><span>${fmtSize(f.size)}</span></div>
       </div>
       <div class="acts">
         <button data-act="open" data-rel="${escA(f.rel)}" title="Open with default app">Open</button>
@@ -1168,6 +1380,7 @@ favChip.onclick=()=>{onlyFavs=!onlyFavs;favChip.classList.toggle('off',!onlyFavs
 const quoteBtn=document.getElementById('quoteClear');
 function quoteCheck(){fetch('/quote').then(r=>r.json()).then(j=>{quoteBtn.style.display=j.pending?'':'none';}).catch(()=>{});}
 quoteCheck(); setInterval(quoteCheck, 30000);
+checkHealth(); setInterval(checkHealth, 60000);
 quoteBtn.onclick=async()=>{await fetch('/clear-quote',{method:'POST'}).catch(()=>{}); quoteBtn.style.display='none';};
 document.getElementById('rescan').onclick=async function(){
   this.textContent='\u23f3 scanning\u2026';

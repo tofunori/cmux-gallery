@@ -695,7 +695,9 @@ class Handler(SimpleHTTPRequestHandler):
                 if os.path.isfile(sp):
                     with open(sp, encoding="utf-8") as f:
                         return self._respond(200, json.load(f))
-                return self._respond(200, {"favs": [], "ratings": {}, "hidden": []})
+                return self._respond(200, {"favs": [], "ratings": {}, "hidden": [],
+                                           "tags": {}, "hideRules": [],
+                                           "collections": {}, "workflow": {}})
             except (KeyError, ValueError, json.JSONDecodeError) as e:
                 return self._respond(400, {"error": "bad request: " + str(e)})
             except Exception as e:
@@ -890,6 +892,21 @@ class Handler(SimpleHTTPRequestHandler):
                                 tags[k] = clean
                 rules = sorted({str(r).strip() for r in req.get("hideRules", [])
                                 if isinstance(r, str) and str(r).strip()})[:200]
+                collections_in = req.get("collections", {})
+                collections = {}
+                if isinstance(collections_in, dict):
+                    for k, v in collections_in.items():
+                        name = str(k).strip()[:80]
+                        if name and isinstance(v, list):
+                            clean = sorted({str(rel) for rel in v if isinstance(rel, str) and str(rel).strip()})[:1000]
+                            if clean:
+                                collections[name] = clean
+                workflow_in = req.get("workflow", {})
+                workflow = {}
+                if isinstance(workflow_in, dict):
+                    allowed_status = {"draft", "candidate", "final", "rejected"}
+                    workflow = {str(k): str(v) for k, v in workflow_in.items()
+                                if isinstance(k, str) and str(v) in allowed_status}
                 rin = req.get("ratings", {})
                 rin = rin if isinstance(rin, dict) else {}
                 _strs = lambda v: sorted({str(x) for x in v}) if isinstance(v, list) else []
@@ -898,7 +915,9 @@ class Handler(SimpleHTTPRequestHandler):
                                      if isinstance(v, int) and 1 <= v <= 5},
                          "hidden": _strs(req.get("hidden", [])),
                          "tags": tags,
-                         "hideRules": rules}
+                         "hideRules": rules,
+                         "collections": collections,
+                         "workflow": workflow}
                 sp = os.path.join(PROJECT, ".fig_state.json")
                 tmp = sp + ".tmp." + str(os.getpid()) + "." + str(threading.get_ident())
                 with open(tmp, "w", encoding="utf-8") as f:
